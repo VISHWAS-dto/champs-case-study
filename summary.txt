@@ -140,3 +140,52 @@ What showed nothing:
 - Why 35% of leads never book a demo: no column in the file explains it.
 
 Next step: Phase 4.
+
+
+PHASE 4 - CHECK THE LEAKS
+=========================
+
+What I did:
+- Tested the 3 candidate leaks from Phase 3 to see if they hold up.
+- For each one, checked if the gap is still there inside every lead
+  source, country, timezone, shift, rep, follow-up count, and time period.
+- Checked if one small group causes the whole gap, if there is enough
+  data, and if other things explain it.
+- Used a fair test for "we went looking for this": shuffled the data
+  5,000 times and ran the same search, to see how often luck alone
+  finds a gap this big.
+- Script:  analysis/phase_04_leak_validation.py
+- Results: results/phase_04_leak_validation.md
+           results/figures/phase_04/ (4 charts)
+
+Results:
+A. Demo booked more than 48 hours after the lead came in - STRONG
+   - 47% of these parents join, vs 75% for demos within 48 hours.
+   - Same gap in every group, both months, every week.
+   - These demos are 40% of all demos but 58% of all no-shows.
+B. India and Vietnam pay less after the demo - STRONG (but not a sales fix)
+   - 11% pay vs 23% elsewhere. Lower than every other country.
+   - Same whichever team or rep handles them, so it is likely price or
+     market, not something the sales team does wrong.
+C. DSA leads pay less after the demo - WEAK
+   - Only 20 paying customers in the group.
+   - Most of the gap comes from one shift and the first 2 weeks of June.
+     Without them, the gap is too small to be sure it is real.
+
+The main problem to fix:
+- Demos booked too far out (more than 48 hours). Parents often don't
+  show up for them.
+- It is the biggest and clearest pattern, it happens everywhere, and the
+  sales team controls when demos are booked.
+
+Important:
+- The data shows the two things go together. It does NOT prove that
+  booking late causes the no-show. Parents who are less keen may simply
+  pick later slots. A test (e.g. booking some leads within 48 hours on
+  purpose) would be needed to prove it.
+
+What I did NOT do:
+- Did not suggest a fix yet.
+- Did not work out lost money yet.
+
+Next step: Phase 5.
