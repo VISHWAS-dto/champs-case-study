@@ -65,3 +65,50 @@ What I did NOT do:
 - Did not look for the problem or the fix yet.
 
 Next step: Phase 2.
+
+
+PHASE 2 - FUNNEL ANALYSIS
+=========================
+
+What is a funnel:
+- The steps a customer goes through from first contact to paying.
+  Fewer people reach each step, so it gets narrower like a funnel.
+
+What I did:
+- Counted how many leads reach each step, and how many drop off.
+- Script:  analysis/phase_02_funnel_analysis.py
+- Results: results/phase_02_funnel_analysis.md (all numbers + formulas)
+           results/figures/phase_02/01_funnel_dropoff.png (chart)
+
+The funnel:
+    Step              Leads    Moved on from step before   Dropped off
+    Lead              5,000    -                           -
+    Demo booked       3,229    64.6%                       1,771 never booked
+    Demo joined       2,060    63.8%                       1,169 did not show up
+    Demo finished     1,786    86.7%                         274 left early
+    Paid                362    20.3%                       1,424 did not buy
+
+- Overall: 362 out of 5,000 leads paid = 7.2%.
+- Check: 1,771 + 1,169 + 274 + 1,424 + 362 = 5,000. Every lead is counted once.
+
+What I found:
+- Most leads are lost at "never booked" (1,771), then "did not buy"
+  (1,424), then "did not show up" (1,169).
+- The weakest step is after the demo: 8 out of 10 people who finish
+  the demo do not pay.
+- The demo itself works well: 87% of people who join stay till the end.
+- Leads from the last week of July did a little worse (6.6% paid vs 7.3%).
+  They may not have had time to finish yet, because we don't know when
+  the data was pulled.
+
+Important:
+- A drop-off is a count of people, NOT lost money. We cannot multiply
+  drop-offs by Rs 60,000, because many of them would never have bought.
+- "Did not show up" also includes people who cancelled or moved the demo.
+  The data cannot tell these apart.
+
+What I did NOT do:
+- Did not suggest any fix yet.
+- Did not work out lost money yet.
+
+Next step: Phase 3.
