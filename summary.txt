@@ -112,3 +112,31 @@ What I did NOT do:
 - Did not work out lost money yet.
 
 Next step: Phase 3.
+
+
+PHASE 3 - FIND THE LEAK
+=======================
+
+What I did:
+- Split the funnel by lead source, geography, timezone, rep, shift,
+  follow-up attempts, and time from lead to demo.
+- Compared every group with everyone else at every step (204 tests),
+  and corrected for running so many tests.
+- Script:  analysis/phase_03_leak_analysis.py
+- Results: results/phase_03_leak_analysis.md
+           results/figures/phase_03/ (4 charts)
+
+Three candidate leaks (none picked as final yet):
+A. Demo booked more than 48 hours after the lead came in.
+   40% of demos. Only 47% of these parents join, vs 75% for demos
+   within 48h. Same gap in every group we checked. Strongest finding.
+B. India and Vietnam: after a finished demo only 11% pay, vs 23% in
+   other countries. Could be price or market, not the sales process.
+C. DSA leads: after a finished demo only 11% pay, vs 21% for other
+   sources. Weaker: could be chance after 204 tests.
+
+What showed nothing:
+- Rep shift, and the parent's local time of the demo.
+- Why 35% of leads never book a demo: no column in the file explains it.
+
+Next step: Phase 4.
