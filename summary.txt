@@ -1,0 +1,37 @@
+PHASE 0 - UNDERSTAND THE ASSIGNMENT
+===================================
+
+What I did:
+1. Looked at the project folder. The PDF and CSV are in the main folder,
+   not in "assignment/" and "data/" folders, so I read them from there.
+2. Read the assignment PDF from start to finish.
+3. Looked only at the first few lines of the CSV to see its column names.
+   I did not analyse the data.
+4. Explained the assignment in simple words and saved it to:
+   results/phase_00_assignment_understanding.md
+
+What the assignment is about:
+- BrightChamps loses possible customer
+s at each step of its sales process
+  (lead -> demo booked -> demo joined -> demo finished -> paid).
+- We must find the biggest place where money is lost, fix it, build a
+  small working tool, and write a one-page memo.
+
+The 4 things to deliver:
+1. The Leak   - where the most money is lost, in rupees per month.
+2. The Lever  - one fix that can go live in 2 weeks with no engineering work,
+                plus the other ideas we rejected and why.
+3. The Build  - a small working tool that really runs.
+4. The Memo   - a one-page PDF summing it all up.
+
+Key numbers given:
+- Rs 60,000 = money earned from each customer who pays.
+- Rs 900    = marketing cost of getting each lead.
+
+What I did NOT do:
+- Did not solve the case.
+- Did not analyse the data.
+- Did not change any existing project files (only added the results file
+  and this summary).
+
+Next step: Phase 1 - explore the dataset.
