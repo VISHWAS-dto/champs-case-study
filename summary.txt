@@ -35,3 +35,33 @@ What I did NOT do:
   and this summary).
 
 Next step: Phase 1 - explore the dataset.
+
+
+PHASE 1 - CHECK THE DATA
+========================
+
+What I did:
+- Checked the CSV file for errors and made charts of it.
+- Scripts:  analysis/phase_01_data_audit.py, analysis/phase_01_audit_charts.py
+- Results:  results/phase_01_data_audit.md (full numbers)
+            results/phase_01_data_audit_visual.md (charts)
+
+What I found:
+- 5,000 leads, 12 columns, June to July 2026.
+- The data is clean: no duplicates, no wrong values, no broken steps.
+- Only one column has blanks: demo date (35% of leads have none).
+- The funnel:
+    5,000 leads -> 3,229 demo booked -> 2,060 joined
+    -> 1,786 finished -> 362 paid (7.2%)
+
+What we still don't know:
+- Which timezone the times are in.
+- Whether a blank demo date means "never booked".
+- The date the data was pulled out of the system.
+- What counts as a "follow-up".
+- The working hours of each shift, and what "DSA" means.
+
+What I did NOT do:
+- Did not look for the problem or the fix yet.
+
+Next step: Phase 2.
