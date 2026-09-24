@@ -1,3 +1,6 @@
+# Python packages for analysis/ and prototype/check_rescue_logic.py.
+# The prototype page (prototype/rescue_sheet.html) needs nothing installed;
+# its JS tests use Node's built-in test runner (Node 18+), no npm packages.
 contourpy==1.4.0
 cycler==0.12.1
 fonttools==4.65.0

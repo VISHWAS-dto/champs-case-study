@@ -34,18 +34,18 @@ Raw file is text. The table shows the type each column can be parsed to without 
 
 | column             | pandas default dtype | parsed as                                              |
 | ------------------ | -------------------- | ------------------------------------------------------ |
-| lead_id            | object               | string / categorical                                   |
-| lead_source        | object               | string / categorical                                   |
-| geography          | object               | string / categorical                                   |
-| parent_timezone    | object               | string / categorical                                   |
-| created_at         | object               | datetime (`%Y-%m-%d %H:%M`), 5000/5000 non-blank parse |
-| demo_scheduled_at  | object               | datetime (`%Y-%m-%d %H:%M`), 3229/3229 non-blank parse |
-| rep_assigned       | object               | string / categorical                                   |
-| rep_shift          | object               | string / categorical                                   |
+| lead_id            | str                  | string / categorical                                   |
+| lead_source        | str                  | string / categorical                                   |
+| geography          | str                  | string / categorical                                   |
+| parent_timezone    | str                  | string / categorical                                   |
+| created_at         | str                  | datetime (`%Y-%m-%d %H:%M`), 5000/5000 non-blank parse |
+| demo_scheduled_at  | str                  | datetime (`%Y-%m-%d %H:%M`), 3229/3229 non-blank parse |
+| rep_assigned       | str                  | string / categorical                                   |
+| rep_shift          | str                  | string / categorical                                   |
 | follow_up_attempts | int64                | integer                                                |
-| demo_joined        | object               | categorical flag (Y/N)                                 |
-| demo_completed     | object               | categorical flag (Y/N)                                 |
-| converted          | object               | categorical flag (Y/N)                                 |
+| demo_joined        | str                  | categorical flag (Y/N)                                 |
+| demo_completed     | str                  | categorical flag (Y/N)                                 |
+| converted          | str                  | categorical flag (Y/N)                                 |
 
 ## 3. Missing values
 

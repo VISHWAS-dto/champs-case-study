@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Late-Demo Rescue Sheet</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --surface: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --line: #deddd8;
+    --accent: #2f5fd0; --move: #1f7a4d; --confirm: #9a6200; --warn: #b3261e; --soft: #eef2fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --surface: #20201e; --text: #ecebe6; --muted: #a09f98; --line: #3a3a36;
+      --accent: #8aa8ff; --move: #5cc98f; --confirm: #e0a84a; --warn: #ff8a80; --soft: #262c3a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 20px 0 8px; }
+  .muted { color: var(--muted); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 12px 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 16px; }
+  label { display: block; font-weight: 600; font-size: 12px; margin-bottom: 3px; }
+  input, select, button { font: inherit; color: inherit; }
+  input[type=datetime-local], input[type=number], input[type=date], select {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; width: 100%;
+  }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-top: 12px; flex-wrap: wrap; }
+  .tabs button { background: transparent; color: var(--muted); border-radius: 6px 6px 0 0; }
+  .tabs button.active { color: var(--text); background: var(--surface); border: 1px solid var(--line); border-bottom-color: var(--surface); margin-bottom: -1px; }
+  .panel { display: none; } .panel.active { display: block; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; background: var(--surface); }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; color: #fff; }
+  .badge.MOVE { background: var(--move); } .badge.CONFIRM { background: var(--confirm); }
+  tr.done td { opacity: .55; }
+  .script { font-size: 12px; color: var(--muted); margin-top: 3px; max-width: 420px; }
+  .error { background: var(--surface); border: 1px solid var(--warn); color: var(--warn); border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
+  .warn { color: var(--warn); font-weight: 600; }
+  .note { background: var(--soft); border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .stat { font-size: 22px; font-weight: 700; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Late-Demo Rescue Sheet</h1>
+  <div class="muted">Flags demos booked more than 48h after the lead arrived, so reps can offer a slot before <code>created_at + 48h</code>. Your data stays in this browser; nothing is uploaded.</div>
+
+  <div class="card">
+    <div class="grid">
+      <div><label for="exportFile">1. CRM export (CSV)</label><input id="exportFile" type="file" accept=".csv,text/csv"></div>
+      <div><label for="logFile">2. Outcome log (optional CSV)</label><input id="logFile" type="file" accept=".csv,text/csv"></div>
+      <div><label for="asOf">Run as of (export clock, UTC)</label><input id="asOf" type="datetime-local"></div>
+      <div><label for="threshold">Late threshold (hours)</label><input id="threshold" type="number" min="1" value="48"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="runBtn">Build today's list</button>
+      <button class="secondary" id="dlList">Download rescue list</button>
+      <button class="secondary" id="dlLog">Download outcome log</button>
+      <button class="secondary" id="clearLog">Clear saved outcomes</button>
+      <span class="muted" id="logInfo"></span>
+    </div>
+  </div>
+
+  <div id="errors"></div>
+
+  <nav class="tabs">
+    <button data-tab="daily" class="active">Daily list</button>
+    <button data-tab="summary">Summary</button>
+    <button data-tab="measure">Measurement</button>
+    <button data-tab="help">How to use</button>
+  </nav>
+
+  <section class="panel active" id="daily"><p class="muted">Load a CRM export and press <b>Build today's list</b>.</p></section>
+  <section class="panel" id="summary"><p class="muted">Build a list first.</p></section>
+
+  <section class="panel" id="measure">
+    <div class="card">
+      <p class="muted" style="margin-top:0">Weekly readout: join rate (J/S) of late demos, rescue arm vs control. Uses the export loaded above (load a <b>later</b> export with <code>demo_joined</code> filled in) and the saved outcomes. Intent-to-treat: every late demo counts in its arm, whatever the outcome.</p>
+      <div class="grid">
+        <div><label for="mFrom">Pilot start (lead created on/after)</label><input id="mFrom" type="date"></div>
+        <div><label for="mTo">Pilot end (lead created on/before)</label><input id="mTo" type="date"></div>
+      </div>
+      <div style="margin-top:10px"><button id="measureBtn">Run readout</button></div>
+    </div>
+    <div id="measureOut"></div>
+  </section>
+
+  <section class="panel" id="help">
+    <div class="card">
+      <h2 style="margin-top:0">Start of shift (analyst)</h2>
+      <ol>
+        <li>Export scheduled demos from the CRM (same 12 columns as the case file).</li>
+        <li>Pick it under <b>1. CRM export</b>. Add yesterday's <code>rescue_outcomes.csv</code> under <b>2</b> if you have one.</li>
+        <li>Leave <b>Run as of</b> at now (for the case data use 2026-07-15 09:00) and press <b>Build today's list</b>.</li>
+        <li>Share the page, or <b>Download rescue list</b> into the shift's sheet.</li>
+      </ol>
+      <h2>During shift (rep)</h2>
+      <ol>
+        <li>Pick your rep ID. Work <span class="badge MOVE">MOVE</span> rows top-down: offer a slot <b>before the deadline shown</b>.</li>
+        <li><span class="badge CONFIRM">CONFIRM</span> rows are past their deadline: just confirm the current slot live.</li>
+        <li>Pick one outcome per row. It saves automatically.</li>
+      </ol>
+      <h2>Rules (in <code>rescue_logic.js</code> → <code>buildRescueList</code>)</h2>
+      <ul>
+        <li>Flag: demo booked, gap from lead creation &gt; threshold, demo still in the future, lead created before "as of".</li>
+        <li>Deadline = <code>created_at + threshold</code>. MOVE if it has not passed, else CONFIRM.</li>
+        <li>Arm: last digit of lead ID odd → rescue (shown to reps), even → control (never shown, never called).</li>
+      </ul>
+      <h2>Known limits</h2>
+      <ul>
+        <li>The export clock is assumed to be UTC. Only the displayed local times depend on this; confirm the time with the parent on the call.</li>
+        <li>Outcomes are saved in this browser only. If reps log on different machines, download each log and merge them.</li>
+        <li>The file <code>sample/rescue_outcomes_demo.csv</code> is <b>SIMULATED</b>, only to demo the tabs. It is not evidence.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<script src="rescue_logic.js"></script>
+<script>
+"use strict";
+const L = window.RescueLogic;
+const STORAGE_KEY = "rescueOutcomes.v1";
+
+const state = {
+  rows: null,          // parsed CRM export
+  outcomes: loadSaved(),
+  result: null,        // output of buildRescueList
+  asOf: null,          // epoch ms
+  runStartedReal: 0,   // Date.now() when the list was built, to advance the simulated clock
+  rep: "",
+};
+
+// ------------------------------------------------------------ helpers
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s === undefined || s === null ? "" : s)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const pct = (x) => (x === null || x === undefined ? "–" : (100 * x).toFixed(1) + "%");
+
+function showError(msg) {
+  $("errors").innerHTML = msg ? `<div class="error">${esc(msg)}</div>` : "";
+}
+
+function readFile(input) {
+  return new Promise((resolve, reject) => {
+    const f = input.files[0];
+    if (!f) return resolve(null);
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error("Could not read " + f.name));
+    r.readAsText(f);
+  });
+}
+
+function loadSaved() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { return {}; }
+}
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.outcomes)); } catch (e) { /* storage blocked: keep in memory */ }
+  $("logInfo").textContent = Object.keys(state.outcomes).length + " outcome(s) saved";
+}
+
+function download(name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function settings() {
+  const t = Number($("threshold").value);
+  if (!(t > 0)) throw new Error("Late threshold must be a positive number of hours.");
+  return { lateThresholdH: t };
+}
+
+// "Now" for logging: the as-of time plus however long the page has been open since the run.
+function nowInExportClock() {
+  return state.asOf + (Date.now() - state.runStartedReal);
+}
+
+// ------------------------------------------------------------ actions
+
+async function run() {
+  showError("");
+  try {
+    const exportText = await readFile($("exportFile"));
+    if (exportText === null && !state.rows) throw new Error("Pick a CRM export CSV first.");
+    if (exportText !== null) state.rows = L.parseCsv(exportText);
+
+    const logText = await readFile($("logFile"));
+    let logProblems = [];
+    if (logText !== null) {
+      const logRows = L.parseCsv(logText);
+      const log = L.readOutcomeLog(logRows);
+      logProblems = log.problems;
+      Object.assign(state.outcomes, log.outcomes);
+      save();
+    }
+
+    state.asOf = L.parseTime($("asOf").value);
+    if (state.asOf === null) throw new Error("Set a valid 'Run as of' time.");
+    state.runStartedReal = Date.now();
+    state.result = L.buildRescueList(state.rows, state.asOf, state.outcomes, settings());
+    state.result.problems = state.result.problems.concat(logProblems);
+    renderDaily();
+    renderSummary();
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+function setOutcome(leadId, code) {
+  if (code) state.outcomes[leadId] = { outcome: code, logged_at: L.formatTime(nowInExportClock()) };
+  else delete state.outcomes[leadId];
+  save();
+  state.result = L.buildRescueList(state.rows, state.asOf, state.outcomes, settings());
+  renderDaily();
+  renderSummary();
+}
+
+// ------------------------------------------------------------ rendering
+
+function simulatedBanner() {
+  const simulated = Object.values(state.outcomes).some((o) => o.source === "SIMULATED");
+  return simulated
+    ? `<p class="warn">Outcomes include SIMULATED demo data. Not evidence.</p>` : "";
+}
+
+function renderDaily() {
+  const { flagged, counts, problems } = state.result;
+  const reps = [...new Set(flagged.filter((r) => r.arm === "RESCUE").map((r) => r.rep_assigned))].sort();
+  if (state.rep && !reps.includes(state.rep)) state.rep = "";
+  const rows = L.repView(flagged, state.rep);
+  const shifts = Object.entries(counts.openRescueByShift).map(([k, v]) => `${esc(k)} ${v}`).join(" · ") || "none";
+
+  const optionList = (sel) => `<option value="">TO DO</option>` + L.OUTCOME_CODES
+    .map((c) => `<option value="${c}"${c === sel ? " selected" : ""}>${c.replace(/_/g, " ")}</option>`).join("");
+
+  const body = rows.map((r) => {
+    const script = r.action === "MOVE"
+      ? `"We have an earlier slot for your child before ${r.deadline_local} your time. Would [slot 1] or [slot 2] work?" If no: "Can I confirm you're all set for ${r.slot_local}?"`
+      : `"Just confirming you're all set for ${r.slot_local} your time?"`;
+    return `<tr class="${r.status === "TO DO" ? "" : "done"}">
+      <td><b>${esc(r.lead_id)}</b><div class="muted">${esc(r.rep_assigned)}</div></td>
+      <td>${esc(r.geography)}</td>
+      <td>${esc(r.deadline_local)}<div class="muted">${esc(r.parent_timezone)}</div></td>
+      <td class="num">${r.hours_left > 0 ? r.hours_left.toFixed(1) + " h" : "passed"}</td>
+      <td>${esc(r.slot_local)}</td>
+      <td><span class="badge ${r.action}">${r.action}</span><div class="script">${esc(script)}</div></td>
+      <td><select data-lead="${esc(r.lead_id)}">${optionList(r.status)}</select>
+        <div class="muted">${esc(r.logged_at)}</div></td>
+    </tr>`;
+  }).join("");
+
+  $("daily").innerHTML = `
+    <div class="card grid">
+      <div><div class="stat">${counts.flagged}</div><div class="muted">upcoming demos booked &gt;${settings().lateThresholdH}h after lead</div></div>
+      <div><div class="stat">${counts.move} / ${counts.confirm}</div><div class="muted">deadline open (MOVE) / passed (CONFIRM)</div></div>
+      <div><div class="stat">${counts.openRescue} / ${counts.openControl}</div><div class="muted">open rows: rescue (odd ID) / control (even ID)</div></div>
+      <div><div class="stat" style="font-size:15px">${shifts}</div><div class="muted">open rescue rows by shift</div></div>
+    </div>
+    ${problems.length ? `<div class="note"><b>${problems.length} row(s) skipped:</b> ${problems.slice(0, 5)
+      .map((p) => `line ${p.line} ${esc(p.lead_id)} (${esc(p.reason)})`).join("; ")}${problems.length > 5 ? "; …" : ""}</div>` : ""}
+    <div class="row" style="margin:12px 0">
+      <label for="repSel" style="margin:0">Rep</label>
+      <select id="repSel" style="width:auto"><option value="">All reps</option>${reps
+        .map((r) => `<option${r === state.rep ? " selected" : ""}>${esc(r)}</option>`).join("")}</select>
+      <span class="muted">Times are in the parent's timezone, assuming the export clock is UTC. Confirm on the call.</span>
+    </div>
+    ${simulatedBanner()}
+    <div class="scroll"><table>
+      <thead><tr><th>Lead</th><th>Geo</th><th>Deadline (parent local)</th><th class="num">Left</th>
+      <th>Current slot (parent local)</th><th>Action · script</th><th>Outcome</th></tr></thead>
+      <tbody>${body || `<tr><td colspan="7" class="muted">No rescue rows.</td></tr>`}</tbody>
+    </table></div>`;
+
+  $("repSel").onchange = (e) => { state.rep = e.target.value; renderDaily(); };
+  $("daily").querySelectorAll("select[data-lead]").forEach((s) => {
+    s.onchange = () => setOutcome(s.dataset.lead, s.value);
+  });
+}
+
+function groupTable(title, groups) {
+  const rows = Object.entries(groups).sort().map(([k, g]) => `<tr>
+    <td>${esc(k)}</td><td class="num">${g.due}</td><td class="num">${g.worked}</td>
+    <td class="num ${g.pctWorkedBeforeDeadline < 0.8 ? "warn" : ""}">${pct(g.pctWorkedBeforeDeadline)}</td>
+    <td>${Object.entries(g.byOutcome).map(([c, n]) => `${esc(c.replace(/_/g, " "))}: ${n}`).join(" · ") || "–"}</td></tr>`).join("");
+  return `<h2>${title}</h2><div class="scroll"><table><thead><tr><th>${title.split(" ").pop()}</th>
+    <th class="num">Due</th><th class="num">Worked</th><th class="num">Worked before deadline (target ≥80%)</th>
+    <th>Outcomes</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function renderSummary() {
+  const s = L.summarise(state.result.flagged, state.asOf, settings());
+  const expiring = s.expiringSoon.map((r) => `<tr><td>${esc(r.lead_id)}</td><td>${esc(r.rep_assigned)}</td>
+    <td>${esc(r.rep_shift)}</td><td class="num">${r.hours_left.toFixed(1)} h</td></tr>`).join("");
+  $("summary").innerHTML = `
+    ${simulatedBanner()}
+    <h2>Expiring in the next ${L.DEFAULT_SETTINGS.expiringSoonH}h, not worked</h2>
+    ${expiring ? `<div class="scroll"><table><thead><tr><th>Lead</th><th>Rep</th><th>Shift</th><th class="num">Left</th></tr></thead>
+      <tbody>${expiring}</tbody></table></div>` : `<p class="muted">None.</p>`}
+    ${groupTable("By shift", s.byShift)}
+    ${groupTable("By rep", s.byRep)}`;
+}
+
+function renderMeasure() {
+  showError("");
+  try {
+    if (!state.rows) throw new Error("Load an export first (a later one, with demo_joined filled in).");
+    const day = (id, end) => {
+      const v = $(id).value;
+      return v ? L.parseTime(v + (end ? " 23:59" : " 00:00")) : undefined;
+    };
+    const m = L.measure(state.rows, state.outcomes, { from: day("mFrom"), to: day("mTo", true) }, settings());
+    const a = m.arms;
+    const ci = m.ci;
+    const pp = (x) => (x >= 0 ? "+" : "") + (100 * x).toFixed(1) + " pp";
+    const byOutcome = Object.entries(m.byOutcome).sort().map(([c, g]) =>
+      `<tr><td>${esc(c.replace(/_/g, " "))}</td><td class="num">${g.n}</td><td class="num">${pct(g.rate)}</td></tr>`).join("");
+
+    $("measureOut").innerHTML = `
+      ${simulatedBanner()}
+      <div class="card"><b>Verdict:</b> ${esc(m.verdict.text)}</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Arm</th><th class="num">Late demos</th><th class="num">Joined</th><th class="num">J/S</th></tr></thead>
+        <tbody>
+          <tr><td>Rescue (odd ID)</td><td class="num">${a.RESCUE.n}</td><td class="num">${a.RESCUE.joined}</td><td class="num">${pct(a.RESCUE.rate)}</td></tr>
+          <tr><td>Control (even ID)</td><td class="num">${a.CONTROL.n}</td><td class="num">${a.CONTROL.joined}</td><td class="num">${pct(a.CONTROL.rate)}</td></tr>
+          <tr><td><b>Difference</b></td><td></td><td></td><td class="num"><b>${ci ? pp(ci.diff) : "–"}</b>
+            <div class="muted">${ci ? `95% CI ${pp(ci.lo)} to ${pp(ci.hi)}` : ""}</div></td></tr>
+        </tbody></table></div>
+      <p>Rescue rows worked before their deadline: <b>${pct(m.completion)}</b> (target ≥80%).
+        ${m.skippedNoResult ? `<span class="muted">${m.skippedNoResult} late demo(s) without a result yet were left out.</span>` : ""}</p>
+      <h2>Rescue arm J/S by outcome <span class="muted">(diagnostic, not causal; compare with control ${pct(a.CONTROL.rate)})</span></h2>
+      <div class="scroll"><table><thead><tr><th>Outcome</th><th class="num">n</th><th class="num">J/S</th></tr></thead>
+        <tbody>${byOutcome}</tbody></table></div>`;
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+// ------------------------------------------------------------ wiring
+
+document.querySelectorAll(".tabs button").forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll(".tabs button, .panel").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    $(b.dataset.tab).classList.add("active");
+  };
+});
+
+$("runBtn").onclick = run;
+$("measureBtn").onclick = renderMeasure;
+$("dlList").onclick = () => {
+  if (!state.result) return showError("Build a list first.");
+  const cols = ["lead_id", "arm", "action", "rep_assigned", "rep_shift", "geography", "parent_timezone",
+    "created_at", "demo_scheduled_at", "gap_h", "deadline_utc", "hours_left", "deadline_local", "slot_local", "status", "logged_at"];
+  download(`rescue_list_${L.formatTime(state.asOf).slice(0, 10)}.csv`, L.toCsv(state.result.flagged, cols));
+};
+$("dlLog").onclick = () => {
+  const rows = Object.entries(state.outcomes).map(([lead_id, o]) => ({ lead_id, outcome: o.outcome, logged_at: o.logged_at, source: o.source || "" }));
+  download("rescue_outcomes.csv", L.toCsv(rows, L.OUTCOME_LOG_COLUMNS.concat("source")));
+};
+$("clearLog").onclick = () => {
+  state.outcomes = {};
+  save();
+  if (state.result) { state.result = L.buildRescueList(state.rows, state.asOf, {}, settings()); renderDaily(); renderSummary(); }
+};
+
+// Default "as of" = now, in the export clock (UTC).
+$("asOf").value = L.formatTime(Date.now()).replace(" ", "T");
+save();
+</script>
+</body>
+</html>

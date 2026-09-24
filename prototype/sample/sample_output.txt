@@ -1,0 +1,28 @@
+Run as of 2026-07-15 09:00 on case_export.csv
+  upcoming demos booked >48h after lead : 92
+  ...deadline open (MOVE)                  : 45
+  ...deadline passed (CONFIRM)             : 47
+  open rows rescue / control               : 27 / 18
+  open rescue rows by shift                : {'IST_SHIFT': 15, 'US_SHIFT': 10, 'SEA_SHIFT': 2}
+
+Rep view AD-07 (top 5, deadline in export clock):
+  L104265  Vietnam      deadline 2026-07-15 09:13     0.2 h  MOVE
+  L102531  Australia    deadline 2026-07-15 12:54     3.9 h  MOVE
+  L104871  India        deadline 2026-07-15 18:46     9.8 h  MOVE
+  L103803  India        deadline 2026-07-16 12:33    27.6 h  MOVE
+  L104545  Vietnam      deadline 2026-07-16 19:17    34.3 h  MOVE
+
+A/A readout (all late demos in the file, nobody was called):
+  RESCUE   n=629   J/S=46.4%
+  CONTROL  n=656   J/S=47.4%
+  difference -1.0 pp, 95% CI -6.4 to +4.5 pp
+
+Phase 8 acceptance checks:
+  [PASS] late_demos    expected 1285, got 1285
+  [PASS] late_rescue   expected 629, got 629
+  [PASS] late_control  expected 656, got 656
+  [PASS] js_rescue     expected 0.464, got 0.464
+  [PASS] js_control    expected 0.474, got 0.474
+  [PASS] flagged       expected 92, got 92
+  [PASS] move          expected 45, got 45
+  [PASS] open_rescue   expected 27, got 27
