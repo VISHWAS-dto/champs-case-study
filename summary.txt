@@ -189,3 +189,65 @@ What I did NOT do:
 - Did not work out lost money yet.
 
 Next step: Phase 5.
+
+
+PHASE 5 - HOW MUCH MONEY IS THE LEAK WORTH
+==========================================
+
+What I did:
+- Put a rupee value on the leak from Phase 4 (demos booked more than
+  48 hours after the lead came in).
+- Script:  analysis/phase_05_financial_impact.py
+- Results: results/phase_05_financial_impact.md (all numbers + formulas)
+           results/figures/phase_05/ (3 charts)
+
+The idea (a "what if"):
+- 1,285 parents had their demo booked late (more than 48 hours).
+- Only 603 of them came to the demo. 682 did not come.
+- Parents booked early (within 48 hours) come 75 times out of 100.
+- What if the late parents had also come 75 times out of 100?
+    1,285 x 75% = about 963 would have come.
+    963 - 603 = about 360 extra parents in the demo.
+- Those 360 extra parents then go through the normal steps:
+    360 joined -> about 310 finish the demo -> about 59 pay.
+- 59 extra customers x Rs 60,000 = about Rs 35.4 lakh in 2 months.
+
+The money:
+    What                                     2 months       per month
+    Money actually earned (362 x 60,000)     Rs 2.17 crore  Rs 1.09 crore
+    Marketing spent (5,000 x 900)            Rs 45 lakh     Rs 22.5 lakh
+    Best case if the leak is fixed           Rs 35.4 lakh   Rs 17.7 lakh
+    Careful estimate (use for planning)      Rs 15.6 lakh   Rs 7.8 lakh
+    Money actually lost                      cannot be proven
+
+Why two numbers (best case and careful):
+- Best case: assumes booking late is the ONLY reason parents don't come.
+- Careful: some parents may pick a late slot because they are less keen,
+  and booking them early would not help. So I only count half of the gap,
+  and use the low end of the gap's likely range. The "half" is my own
+  judgment, not something the data shows.
+
+Where the Rs 900 marketing cost fits:
+- It is already spent. Fixing the leak needs no new leads, so it is NOT
+  taken away from the extra money.
+- It shows the cost of getting each paying customer: Rs 12,431 today,
+  about Rs 10,687 if the full leak were fixed.
+- Getting the same 59 extra customers by buying more leads would cost
+  about Rs 7.3 lakh of marketing. Fixing the leak gets them without that.
+
+Why NOT "every non-buyer x Rs 60,000":
+- 1,162 late parents did not buy. 1,162 x 60,000 = Rs 6.97 crore.
+- That is wrong. Most of them would not have bought anyway. Even among
+  parents booked early, only about 12 out of 100 end up paying.
+
+Why the actual loss cannot be proven:
+- The data shows late booking and no-shows go together, not that one
+  causes the other.
+- Rs 60,000 is money coming in, not profit.
+- We don't know what the fix would cost to run.
+
+What I did NOT do:
+- Did not suggest a fix yet.
+- Did not add candidates B and C (B is not a sales problem, C is weak).
+
+Next step: Phase 6.
