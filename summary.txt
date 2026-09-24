@@ -381,3 +381,43 @@ How we will know it worked:
 - Reps didn't do the calls -> fix that first, then judge.
 
 Next step: Phase 8 - build a working version of the rescue list.
+
+
+PHASE 11 - THE ONE-PAGE MEMO
+============================
+
+What I did:
+- Wrote the final one-page memo, using only numbers already checked in
+  earlier phases. No new analysis.
+- Files:   memo/final_memo.md  (the memo text)
+           memo/final_memo.pdf (the same memo as a one-page PDF)
+
+What the memo covers (8 parts):
+1. The leak:        40% of demos are booked more than 48 hours after
+                    the lead came in. Only 47 out of 100 of these
+                    parents come, vs 75 out of 100 for earlier demos.
+2. The money:       Careful estimate about Rs 7.8 lakh a month.
+                    Best case about Rs 17.7 lakh a month.
+                    Key sum: 1,285 late demos x 24.65 points x 50%
+                    x 16.4% = about 26 customers x Rs 60,000
+                    = Rs 15.6 lakh in 2 months.
+3. The fix:         The daily Late-Demo Rescue list.
+4. Why this fix:    Fast, no engineers, easy to measure. The 4 other
+                    ideas and why each was rejected.
+5. The tool:        The rescue sheet page and what it does.
+6. Biggest risk:    Reps skip the calls or call too late.
+7. How we measure:  4-week test, called half vs untouched half, and
+                    the scale / stop / fix-first rule.
+8. Starting point:  The numbers to write down before going live
+                    (47 out of 100 late-booked parents come today).
+
+Important:
+- The memo says clearly that late booking and no-shows go together,
+  but the data does not prove one causes the other. The 4-week test
+  with the untouched half is what will show that.
+- The money is income, not profit, and not a proven loss.
+
+What I did NOT do:
+- Did not add new numbers or new analysis.
+
+This is the last phase.
