@@ -312,3 +312,72 @@ What I did NOT do:
 
 Next step: Phase 7 - choose one fix and explain why the others were
 rejected.
+
+
+PHASE 7 - CHOOSING THE FIX
+==========================
+
+What I did:
+- Compared the 5 fixes from Phase 6 and picked ONE.
+- Explained why the other 4 were not picked.
+- Made 4 charts.
+- Script:  analysis/phase_07_lever_charts.py
+- Results: results/phase_07_selected_lever.md
+           results/figures/phase_07/ (4 charts)
+
+The fix I picked: the daily "Late-Demo Rescue" list
+- Every morning, each shift gets a list of demos that were booked more
+  than 48 hours after the parent first came in.
+- The rep calls or WhatsApps the parent and offers an earlier slot.
+- If the parent can't move, the rep just confirms the booked time.
+- Only half the list gets a call. The other half is left alone so we
+  can compare the two and see if the calls really help.
+
+One important detail:
+- The new slot must be within 48 hours of when the parent FIRST came in.
+- Moving a demo from day 5 to day 3 does not help. Parents show up
+  about 45-50 times out of 100 anywhere after 48 hours.
+- So each row on the list has a deadline, and reps must act fast.
+
+Why this fix:
+- Ready in about 5 working days. No engineers needed, just a
+  spreadsheet and the data export the company already has.
+- Small workload: about 1 call per rep per day, around 5 minutes.
+- It helps whatever the real reason for no-shows turns out to be
+  (the wait, or less keen parents).
+- It is easy to measure fairly (called half vs not-called half).
+- We can build a working version of it using the case data.
+
+Why not the others:
+1. Booking rule:  Reps can dodge it by writing "parent asked" every
+                  time. Hard to measure fairly.
+2. Reminders:     Only works if late demos get fewer reminders today,
+                  and nobody has checked that yet. WhatsApp approval
+                  could delay it.
+3. Risk score:    Nothing to rank. After 48 hours all late demos look
+                  the same.
+4. AI agent:      Too slow (over 2 weeks), needs engineers, and a wrong
+                  message to a parent could hurt the brand.
+
+What it could be worth (per month):
+- If the calls lift show-ups on late demos by about 12 points
+  (47 -> 59 out of 100): about Rs 7.8 lakh a month.
+- If they close the whole gap (47 -> 75): about Rs 17.7 lakh a month.
+- Each extra point of show-up is worth about Rs 63,000 a month.
+
+Biggest guess (not proven):
+- That the waiting itself makes parents skip the demo. If parents who
+  pick late slots were simply less keen, calling them helps less.
+
+Biggest risk:
+- Reps are busy and skip the calls, or call too late.
+- To catch this, we check daily that at least 80 out of 100 rows are
+  worked before their deadline.
+
+How we will know it worked:
+- Run it for 4 weeks. Compare show-ups: called half vs untouched half.
+- Called half clearly better -> keep it and grow it.
+- No difference (and reps did the calls) -> stop, try something else.
+- Reps didn't do the calls -> fix that first, then judge.
+
+Next step: Phase 8 - build a working version of the rescue list.
