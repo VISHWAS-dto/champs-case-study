@@ -40,7 +40,7 @@ EXPECTED = {
 def load(path):
     """Read the export. Raises ValueError with a readable message on bad input."""
     path = Path(path)
-    if not path.exists():
+    if not path.is_file():
         raise ValueError(f"File not found: {path}")
     df = pd.read_csv(path, dtype=str, keep_default_na=False)
     missing = [c for c in REQUIRED if c not in df.columns]
@@ -52,7 +52,13 @@ def load(path):
     bad = df["created_at"].isna() | df["demo_scheduled_at"].isna()
     if bad.any():
         print(f"warning: skipped {bad.sum()} row(s) with unreadable dates", file=sys.stderr)
-    return df[~bad]
+    no_digit = ~df["lead_id"].str.contains(r"\d")
+    if no_digit.any():
+        print(f"warning: skipped {no_digit.sum()} row(s) whose lead_id has no digit", file=sys.stderr)
+    dup = df["lead_id"].duplicated()
+    if dup.any():
+        print(f"warning: skipped {dup.sum()} duplicate lead_id row(s) (first kept)", file=sys.stderr)
+    return df[~bad & ~no_digit & ~dup]
 
 
 def arm(lead_ids):
@@ -73,8 +79,9 @@ def build_rescue_list(df, as_of, late_h=LATE_H):
     out = late_demos(df[df["created_at"] <= as_of], late_h)
     out = out[out["demo_scheduled_at"] > as_of].copy()
     out["deadline"] = out["created_at"] + pd.Timedelta(hours=late_h)
-    out["hours_left"] = ((out["deadline"] - as_of).dt.total_seconds() / 3600).round(1)
-    out["action"] = np.where(out["hours_left"] > 0, "MOVE", "CONFIRM")
+    hours_left = (out["deadline"] - as_of).dt.total_seconds() / 3600
+    out["action"] = np.where(hours_left > 0, "MOVE", "CONFIRM")  # decide before rounding, as the JS does
+    out["hours_left"] = hours_left.round(1)
     out["action_order"] = (out["action"] == "CONFIRM").astype(int)
     return out.sort_values(["action_order", "deadline"]).drop(columns="action_order")
 
@@ -82,11 +89,17 @@ def build_rescue_list(df, as_of, late_h=LATE_H):
 def aa_readout(df, late_h=LATE_H):
     """J/S by arm for every late demo, with a 95% CI on the difference (normal approximation)."""
     late = late_demos(df, late_h)
-    joined = late["demo_joined"].str.upper() == "Y"
+    result = late["demo_joined"].str.strip().str.upper()
+    late = late[result.isin(["Y", "N"])]  # demos not yet held have no result; the JS skips them too
+    joined = result[late.index] == "Y"
     res = {}
     for a in ("RESCUE", "CONTROL"):
         m = late["arm"] == a
-        res[a] = {"n": int(m.sum()), "joined": int(joined[m].sum()), "rate": float(joined[m].mean())}
+        n = int(m.sum())
+        res[a] = {"n": n, "joined": int(joined[m].sum()), "rate": float(joined[m].mean()) if n else float("nan")}
+    if not (res["RESCUE"]["n"] and res["CONTROL"]["n"]):
+        res["diff"] = res["lo"] = res["hi"] = float("nan")
+        return res
     p1, n1, p2, n2 = res["RESCUE"]["rate"], res["RESCUE"]["n"], res["CONTROL"]["rate"], res["CONTROL"]["n"]
     diff = p1 - p2
     se = np.sqrt(p1 * (1 - p1) / n1 + p2 * (1 - p2) / n2)
@@ -103,6 +116,8 @@ def main(argv=None):
 
     try:
         as_of = pd.Timestamp(args.as_of)
+        if pd.isna(as_of):
+            raise ValueError("--as-of is empty")
         df = load(args.csv)
     except (ValueError, TypeError) as e:
         print(f"error: {e}", file=sys.stderr)

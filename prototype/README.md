@@ -17,6 +17,7 @@ prototype/
 │   └── sample_output.txt      # what check_rescue_logic.py prints
 └── tests/
     ├── rescue_logic.test.js   # Node built-in test runner, no npm packages
+    ├── e2e_browser.mjs        # drives the page in headless Chrome (Phase 10 QA)
     └── test_check_rescue_logic.py  # stdlib unittest
 ```
 
@@ -87,8 +88,9 @@ pip install -r requirements.txt
 python3 prototype/check_rescue_logic.py                      # pandas version; exits 1 if any acceptance check fails
 python3 prototype/check_rescue_logic.py my_export.csv --as-of "2026-07-20 09:00" --rep AD-03
 
-node --test prototype/tests/rescue_logic.test.js             # 19 tests, needs Node 18+
-python3 -m unittest discover -s prototype/tests -v           # 5 tests
+node --test prototype/tests/rescue_logic.test.js             # 27 tests, needs Node 18+
+python3 -m unittest discover -s prototype/tests -v           # 9 tests
+node prototype/tests/e2e_browser.mjs                         # 25 browser checks, needs Node 22+ and Chrome (CHROME=… to override path)
 ```
 
 The JS tests cover CSV parsing, time handling, each flag rule, sorting, summaries, the outcome log, the CI and the decision rule. They also reproduce the Phase 8 acceptance counts on the case CSV. The Python tests check that pandas reaches the same counts independently.
@@ -96,15 +98,20 @@ The JS tests cover CSV parsing, time handling, each flag rule, sorting, summarie
 ## Errors the tool handles
 
 - Missing columns → a message naming them. Empty file or an unclosed quote → a message.
-- Unreadable dates or lead IDs without a digit → the row is skipped and listed under "row(s) skipped". The rest of the file still loads.
+- Unreadable or impossible dates (e.g. `2026-02-30`, `10:75`), lead IDs without a digit, or duplicate lead IDs → the row is skipped and listed under "row(s) need attention". The rest of the file still loads.
+- Semicolon-separated CSV (Excel in some locales) → the missing-column message says to re-save as comma-separated.
+- Outcome log: unknown codes, bad timestamps or lead IDs without a digit are skipped; an outcome logged for a **control** lead is kept but flagged as holdout contamination. When logs overlap, the entry with the later `logged_at` wins, whatever order they are loaded in.
+- Missing timezone → the time is shown in UTC and labelled "timezone missing".
 - Unknown timezone → the time is shown in UTC and labelled.
 - Outcome-log rows with unknown codes or bad timestamps → skipped and reported.
+- Downloaded CSVs prefix cells that start with `=`, `+` or `@` with `'`, so a spreadsheet won't run CRM text as a formula.
+- **Clear saved outcomes** needs a second click within 4 seconds.
 - Browser storage blocked (private window) → outcomes stay in memory for the session. Use **Download outcome log**.
 
 ## Known limits
 
 - The export clock is assumed to be **UTC**. Flags and deadlines don't depend on it (they are differences), but the displayed local times do. The rep confirms the time with the parent on the call.
 - The CRM has no booking timestamp, so a row can first appear after its deadline has passed (it then shows as CONFIRM).
-- Outcomes are saved per browser (`localStorage`). If reps log on different machines, the analyst downloads each log and loads them one after another (later rows win).
+- Outcomes are saved per browser (`localStorage`). If reps log on different machines, the analyst downloads each log and loads them one after another (the later `logged_at` wins).
 - `sample/rescue_outcomes_demo.csv` is **simulated**, only to demo the tabs. The page shows a warning whenever it is loaded.
 - Not built on purpose: CRM or calendar integration, messaging, logins, risk scoring (see Phase 8 §12).

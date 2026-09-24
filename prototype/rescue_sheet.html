@@ -138,6 +138,8 @@ const state = {
   result: null,        // output of buildRescueList
   asOf: null,          // epoch ms
   runStartedReal: 0,   // Date.now() when the list was built, to advance the simulated clock
+  logProblems: [],     // problems from the last outcome log loaded
+  settings: null,      // settings used for the current list (so editing the input later can't desync it)
   rep: "",
 };
 
@@ -200,20 +202,20 @@ async function run() {
     if (exportText !== null) state.rows = L.parseCsv(exportText);
 
     const logText = await readFile($("logFile"));
-    let logProblems = [];
+    state.logProblems = [];
     if (logText !== null) {
       const logRows = L.parseCsv(logText);
       const log = L.readOutcomeLog(logRows);
-      logProblems = log.problems;
-      Object.assign(state.outcomes, log.outcomes);
+      state.logProblems = log.problems;
+      state.outcomes = L.mergeOutcomes(state.outcomes, log.outcomes); // later logged_at wins
       save();
     }
 
     state.asOf = L.parseTime($("asOf").value);
     if (state.asOf === null) throw new Error("Set a valid 'Run as of' time.");
+    state.settings = settings();
     state.runStartedReal = Date.now();
-    state.result = L.buildRescueList(state.rows, state.asOf, state.outcomes, settings());
-    state.result.problems = state.result.problems.concat(logProblems);
+    rebuild();
     renderDaily();
     renderSummary();
   } catch (e) {
@@ -221,11 +223,17 @@ async function run() {
   }
 }
 
+// Rebuild the list from the loaded export and current outcomes; keep outcome-log problems visible.
+function rebuild() {
+  state.result = L.buildRescueList(state.rows, state.asOf, state.outcomes, state.settings);
+  state.result.problems = state.result.problems.concat(state.logProblems);
+}
+
 function setOutcome(leadId, code) {
   if (code) state.outcomes[leadId] = { outcome: code, logged_at: L.formatTime(nowInExportClock()) };
   else delete state.outcomes[leadId];
   save();
-  state.result = L.buildRescueList(state.rows, state.asOf, state.outcomes, settings());
+  rebuild();
   renderDaily();
   renderSummary();
 }
@@ -256,7 +264,7 @@ function renderDaily() {
       <td><b>${esc(r.lead_id)}</b><div class="muted">${esc(r.rep_assigned)}</div></td>
       <td>${esc(r.geography)}</td>
       <td>${esc(r.deadline_local)}<div class="muted">${esc(r.parent_timezone)}</div></td>
-      <td class="num">${r.hours_left > 0 ? r.hours_left.toFixed(1) + " h" : "passed"}</td>
+      <td class="num">${r.action === "MOVE" ? r.hours_left.toFixed(1) + " h" : "passed"}</td>
       <td>${esc(r.slot_local)}</td>
       <td><span class="badge ${r.action}">${r.action}</span><div class="script">${esc(script)}</div></td>
       <td><select data-lead="${esc(r.lead_id)}">${optionList(r.status)}</select>
@@ -266,12 +274,12 @@ function renderDaily() {
 
   $("daily").innerHTML = `
     <div class="card grid">
-      <div><div class="stat">${counts.flagged}</div><div class="muted">upcoming demos booked &gt;${settings().lateThresholdH}h after lead</div></div>
+      <div><div class="stat">${counts.flagged}</div><div class="muted">upcoming demos booked &gt;${state.settings.lateThresholdH}h after lead</div></div>
       <div><div class="stat">${counts.move} / ${counts.confirm}</div><div class="muted">deadline open (MOVE) / passed (CONFIRM)</div></div>
       <div><div class="stat">${counts.openRescue} / ${counts.openControl}</div><div class="muted">open rows: rescue (odd ID) / control (even ID)</div></div>
       <div><div class="stat" style="font-size:15px">${shifts}</div><div class="muted">open rescue rows by shift</div></div>
     </div>
-    ${problems.length ? `<div class="note"><b>${problems.length} row(s) skipped:</b> ${problems.slice(0, 5)
+    ${problems.length ? `<div class="note"><b>${problems.length} row(s) need attention:</b> ${problems.slice(0, 5)
       .map((p) => `line ${p.line} ${esc(p.lead_id)} (${esc(p.reason)})`).join("; ")}${problems.length > 5 ? "; …" : ""}</div>` : ""}
     <div class="row" style="margin:12px 0">
       <label for="repSel" style="margin:0">Rep</label>
@@ -303,7 +311,7 @@ function groupTable(title, groups) {
 }
 
 function renderSummary() {
-  const s = L.summarise(state.result.flagged, state.asOf, settings());
+  const s = L.summarise(state.result.flagged, state.asOf, state.settings);
   const expiring = s.expiringSoon.map((r) => `<tr><td>${esc(r.lead_id)}</td><td>${esc(r.rep_assigned)}</td>
     <td>${esc(r.rep_shift)}</td><td class="num">${r.hours_left.toFixed(1)} h</td></tr>`).join("");
   $("summary").innerHTML = `
@@ -373,10 +381,19 @@ $("dlLog").onclick = () => {
   const rows = Object.entries(state.outcomes).map(([lead_id, o]) => ({ lead_id, outcome: o.outcome, logged_at: o.logged_at, source: o.source || "" }));
   download("rescue_outcomes.csv", L.toCsv(rows, L.OUTCOME_LOG_COLUMNS.concat("source")));
 };
+// Two clicks to clear, so one mis-click can't wipe a shift's outcomes.
+let clearArmed = null;
 $("clearLog").onclick = () => {
+  if (!clearArmed) {
+    $("clearLog").textContent = "Click again to delete all outcomes";
+    clearArmed = setTimeout(() => { clearArmed = null; $("clearLog").textContent = "Clear saved outcomes"; }, 4000);
+    return;
+  }
+  clearTimeout(clearArmed); clearArmed = null;
+  $("clearLog").textContent = "Clear saved outcomes";
   state.outcomes = {};
   save();
-  if (state.result) { state.result = L.buildRescueList(state.rows, state.asOf, {}, settings()); renderDaily(); renderSummary(); }
+  if (state.result) { rebuild(); renderDaily(); renderSummary(); }
 };
 
 // Default "as of" = now, in the export clock (UTC).

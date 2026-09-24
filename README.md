@@ -40,6 +40,7 @@ Check and test:
 python3 prototype/check_rescue_logic.py                  # pandas check of the Phase 8 acceptance counts
 node --test prototype/tests/rescue_logic.test.js         # core logic (Node 18+, no npm packages)
 python3 -m unittest discover -s prototype/tests -v       # Python check script
+node prototype/tests/e2e_browser.mjs                     # the page itself, in headless Chrome (Node 22+)
 ```
 
 No API keys or secrets are used anywhere in this repo.

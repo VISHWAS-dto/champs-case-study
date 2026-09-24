@@ -1,4 +1,4 @@
-// Tests for rescue_logic.js. Run with:  node --test prototype/tests/
+// Tests for rescue_logic.js. Run with:  node --test prototype/tests/rescue_logic.test.js
 // Uses only Node's built-in test runner (Node 18+). No npm packages.
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -190,6 +190,57 @@ test("measure leaves out demos without a result and honours the pilot window", (
   const m = L.measure(rows, {}, { from: L.parseTime("2026-07-01 00:00") });
   assert.equal(m.skippedNoResult, 1);
   assert.equal(m.arms.RESCUE.n, 1);
+});
+
+// ------------------------------------------------------------------ Phase 10 QA regressions
+
+test("parseTime rejects out-of-range minutes, seconds and hours instead of rolling over", () => {
+  assert.equal(L.parseTime("2026-07-15 10:75"), null);
+  assert.equal(L.parseTime("2026-07-15 10:00:99"), null);
+  assert.equal(L.parseTime("2026-07-15 24:00"), null);
+  assert.equal(L.parseTime("2026-07-15 23:59:59"), Date.UTC(2026, 6, 15, 23, 59, 59));
+});
+
+test("a MOVE row with minutes left never shows 0.0 h", () => {
+  const r = L.buildRescueList(csv("L1,x,USA,UTC,2026-07-13 09:02,2026-07-17 09:00,AD-01,US_SHIFT,0,,,"), AS_OF).flagged[0];
+  assert.equal(r.action, "MOVE");
+  assert.equal(r.hours_left, 0.1);
+});
+
+test("duplicate lead IDs are listed once and reported", () => {
+  const line = "L1,x,USA,UTC,2026-07-14 09:00,2026-07-17 09:00,AD-01,US_SHIFT,0,,,";
+  const r = L.buildRescueList(csv(line, line), AS_OF);
+  assert.equal(r.counts.flagged, 1);
+  assert.match(r.problems[0].reason, /duplicate/);
+});
+
+test("a missing timezone is labelled, not shown in the machine's zone", () => {
+  assert.match(L.formatLocal(AS_OF, ""), /timezone missing/);
+});
+
+test("outcome log: bad lead IDs rejected, control leads flagged, right error message", () => {
+  const { outcomes, problems } = L.readOutcomeLog(L.parseCsv(
+    "lead_id,outcome,logged_at\n__proto__,no_answer,2026-07-15 09:00\nL2,no_answer,2026-07-15 09:00"));
+  assert.equal(Object.getPrototypeOf(outcomes), Object.prototype);
+  assert.deepEqual(Object.keys(outcomes), ["L2"]);
+  assert.deepEqual(problems.map((p) => p.lead_id), ["__proto__", "L2"]);
+  assert.match(problems[1].reason, /CONTROL/);
+  assert.throws(() => L.readOutcomeLog(L.parseCsv("lead,outcome\nL1,x")), /outcome log with columns/);
+});
+
+test("semicolon-separated exports get a hint", () => {
+  assert.throws(() => L.buildRescueList(L.parseCsv(HEADER.replace(/,/g, ";") + "\nx"), AS_OF), /semicolon/);
+});
+
+test("mergeOutcomes keeps the later logged_at, whatever the load order", () => {
+  const older = { L1: { outcome: "no_answer", logged_at: "2026-07-15 09:00" } };
+  const newer = { L1: { outcome: "moved_before_deadline", logged_at: "2026-07-15 11:00" } };
+  assert.equal(L.mergeOutcomes(newer, older).L1.outcome, "moved_before_deadline");
+  assert.equal(L.mergeOutcomes(older, newer).L1.outcome, "moved_before_deadline");
+});
+
+test("toCsv neutralises spreadsheet formulas but leaves negative numbers alone", () => {
+  assert.equal(L.toCsv([{ a: "=HYPERLINK(1)", b: -12.5 }], ["a", "b"]), "a,b\n'=HYPERLINK(1),-12.5\n");
 });
 
 // ------------------------------------------------------------------ acceptance on the case data (Phase 8 §10A)

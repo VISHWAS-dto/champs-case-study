@@ -58,6 +58,37 @@ class RescueListTest(unittest.TestCase):
         self.assertIn("skipped 1 row", err.getvalue())
 
 
+class QaRegressionTest(unittest.TestCase):
+    def test_action_is_decided_before_rounding(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            df = C.load(write_csv(tmp, "L1,x,USA,UTC,2026-07-13 09:02,2026-07-17 09:00,AD-01,US_SHIFT,0,N,N,N"))
+        self.assertEqual(C.build_rescue_list(df, AS_OF).iloc[0].action, "MOVE")
+
+    def test_bad_and_duplicate_lead_ids_are_skipped_not_a_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            line = "L1,x,USA,UTC,2026-07-14 09:00,2026-07-17 09:00,AD-01,US_SHIFT,0,N,N,N"
+            with redirect_stderr(io.StringIO()):
+                df = C.load(write_csv(tmp, line, line, line.replace("L1", "LX", 1)))
+        self.assertEqual(list(df.lead_id), ["L1"])
+
+    def test_demos_without_a_result_are_left_out_of_the_readout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            df = C.load(write_csv(
+                tmp,
+                "L1,x,USA,UTC,2026-07-01 09:00,2026-07-05 09:00,AD-01,US_SHIFT,0,,N,N",   # no result yet
+                "L3,x,USA,UTC,2026-07-01 09:00,2026-07-05 09:00,AD-01,US_SHIFT,0,Y,N,N",
+            ))
+        res = C.aa_readout(df)
+        self.assertEqual(res["RESCUE"]["n"], 1)
+        self.assertEqual(res["CONTROL"]["n"], 0)  # empty arm: no crash, CI is nan
+
+    def test_empty_as_of_and_directory_are_readable_errors(self):
+        with redirect_stderr(io.StringIO()):
+            self.assertEqual(C.main(["--as-of", ""]), 2)
+            with tempfile.TemporaryDirectory() as tmp:
+                self.assertEqual(C.main([tmp]), 2)
+
+
 class CaseDataTest(unittest.TestCase):
     def test_acceptance_checks_pass(self):
         out = io.StringIO()

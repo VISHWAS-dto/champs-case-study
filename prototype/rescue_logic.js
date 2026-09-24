@@ -78,7 +78,8 @@
   /** Turn an array of objects into CSV text (quotes fields that need it). */
   function toCsv(rows, columns) {
     const esc = (v) => {
-      const s = v === null || v === undefined ? "" : String(v);
+      let s = v === null || v === undefined ? "" : String(v);
+      if (/^[=+@\t\r]/.test(s)) s = "'" + s; // stop spreadsheets running CRM text as a formula
       return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
     return [columns.join(",")]
@@ -87,12 +88,14 @@
   }
 
   /** Throw a readable error if any required column is missing. */
-  function checkColumns(rows, required) {
+  function checkColumns(rows, required, expected) {
     if (!rows.length) throw new Error("The file has a header but no data rows.");
     const missing = required.filter((c) => !(c in rows[0]));
     if (missing.length) {
-      throw new Error("Missing column(s): " + missing.join(", ") +
-        ". Expected the CRM export with the 12 case-file columns.");
+      const semicolons = Object.keys(rows[0]).some((h) => h.includes(";"));
+      throw new Error("Missing column(s): " + missing.join(", ") + ". Expected " +
+        (expected || "the CRM export with the 12 case-file columns") + "." +
+        (semicolons ? " The file looks semicolon-separated; save it as comma-separated CSV." : ""));
     }
   }
 
@@ -101,7 +104,7 @@
   /** "YYYY-MM-DD HH:MM[:SS]" (or with a "T") in the export clock → epoch ms, or null. */
   function parseTime(s) {
     const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec((s || "").trim());
-    if (!m) return null;
+    if (!m || +m[4] > 23 || +m[5] > 59 || +(m[6] || 0) > 59) return null;
     const t = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
     const d = new Date(t);
     // Reject impossible dates such as 2026-02-30 (Date.UTC would roll them over).
@@ -117,6 +120,7 @@
   const formatterCache = {};
   /** epoch ms → "Wed 15 Jul, 16:13" in the given IANA timezone. Falls back to UTC if the zone is unknown. */
   function formatLocal(t, timeZone) {
+    if (!timeZone) return formatLocal(t, "UTC") + " (UTC: timezone missing)";
     let fmt = formatterCache[timeZone];
     if (!fmt) {
       try {
@@ -159,10 +163,16 @@
 
     const flagged = [];
     const problems = [];
+    const seen = new Set();
 
     rows.forEach((row, i) => {
       const line = i + 2; // +1 for the header, +1 for 1-based line numbers
       if (!row.demo_scheduled_at) return;                        // never booked
+      if (seen.has(row.lead_id)) {
+        problems.push({ line, lead_id: row.lead_id, reason: "duplicate lead_id (first row kept)" });
+        return;
+      }
+      seen.add(row.lead_id);
       const created = parseTime(row.created_at);
       const demo = parseTime(row.demo_scheduled_at);
       if (created === null || demo === null) {
@@ -194,7 +204,7 @@
         gap_h: round1(gapH),
         deadline_utc: formatTime(deadline),
         deadline_ms: deadline,
-        hours_left: round1(hoursLeft),
+        hours_left: hoursLeft > 0 ? Math.max(round1(hoursLeft), 0.1) : round1(hoursLeft),
         action: hoursLeft > 0 ? "MOVE" : "CONFIRM",
         arm,
         deadline_local: formatLocal(deadline, row.parent_timezone),
@@ -291,8 +301,11 @@
     const byOutcome = {};
     let workedInTime = 0;
     let skippedNoResult = 0;
+    const seen = new Set();
 
     rows.forEach((row) => {
+      if (seen.has(row.lead_id)) return; // duplicates: first row counts, as in the daily list
+      seen.add(row.lead_id);
       const created = parseTime(row.created_at);
       const demo = parseTime(row.demo_scheduled_at);
       if (created === null || demo === null) return;
@@ -349,20 +362,37 @@
 
   /** Outcome-log rows → { lead_id: {outcome, logged_at} }. Rows with unknown codes are reported, not kept. */
   function readOutcomeLog(rows) {
-    checkColumns(rows, OUTCOME_LOG_COLUMNS);
+    checkColumns(rows, OUTCOME_LOG_COLUMNS, "an outcome log with columns " + OUTCOME_LOG_COLUMNS.join(", "));
     const map = {};
     const problems = [];
     rows.forEach((r, i) => {
-      if (!OUTCOME_CODES.includes(r.outcome)) {
+      const arm = armFor(r.lead_id);
+      if (!arm) {
+        problems.push({ line: i + 2, lead_id: r.lead_id, reason: "lead_id has no digit" });
+      } else if (!OUTCOME_CODES.includes(r.outcome)) {
         problems.push({ line: i + 2, lead_id: r.lead_id, reason: "unknown outcome '" + r.outcome + "'" });
       } else if (parseTime(r.logged_at) === null) {
         problems.push({ line: i + 2, lead_id: r.lead_id, reason: "unreadable logged_at" });
       } else {
         map[r.lead_id] = { outcome: r.outcome, logged_at: r.logged_at }; // later rows win
         if (r.source) map[r.lead_id].source = r.source; // e.g. SIMULATED demo data
+        if (arm === "CONTROL") {
+          // Kept (intent-to-treat), but a control lead was called: the holdout is contaminated.
+          problems.push({ line: i + 2, lead_id: r.lead_id, reason: "CONTROL lead was worked (holdout contamination; kept)" });
+        }
       }
     });
     return { outcomes: map, problems };
+  }
+
+  /** Merge outcome maps: for each lead the entry with the later logged_at wins (ties go to `incoming`). */
+  function mergeOutcomes(current, incoming) {
+    const out = Object.assign({}, current);
+    Object.keys(incoming).forEach((id) => {
+      const a = out[id], b = incoming[id];
+      if (!a || (parseTime(b.logged_at) || 0) >= (parseTime(a.logged_at) || 0)) out[id] = b;
+    });
+    return out;
   }
 
   // ------------------------------------------------------------------ helpers
@@ -378,7 +408,7 @@
   const api = {
     DEFAULT_SETTINGS, OUTCOME_CODES, REQUIRED_COLUMNS, OUTCOME_LOG_COLUMNS,
     parseCsv, toCsv, parseTime, formatTime, formatLocal, armFor,
-    buildRescueList, repView, summarise, measure, diffCi, readOutcomeLog,
+    buildRescueList, repView, summarise, measure, diffCi, readOutcomeLog, mergeOutcomes,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
