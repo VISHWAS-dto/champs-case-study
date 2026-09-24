@@ -251,3 +251,64 @@ What I did NOT do:
 - Did not add candidates B and C (B is not a sales problem, C is weak).
 
 Next step: Phase 6.
+
+
+PHASE 6 - IDEAS TO FIX THE LEAK
+===============================
+
+What I did:
+- Wrote 5 possible fixes for the leak (demos booked more than 48 hours
+  after the lead came in). Did NOT pick one yet.
+- For each fix: what it solves, how it works, steps, time to launch,
+  tech and team needed, AI use, risks, how to measure it, main downside.
+- Script:  analysis/phase_06_intervention_charts.py
+- Results: results/phase_06_intervention_options.md
+           results/figures/phase_06/ (4 charts)
+
+Useful facts from the data:
+- About 21 demos a day are booked late. That is fewer than 2 per rep per
+  day (12 reps), so the team can handle them by hand.
+- Parents come about 75 times out of 100 when the demo is within 48 hours.
+  After 48 hours it drops to about 47, and it does NOT keep falling.
+  A demo 3 days away and one 7 days away do about the same.
+- The team can book fast: half of the early demos happen within 15 hours.
+
+Two possible reasons for the leak (the data can't tell which):
+1. The process: something changes at 48 hours, e.g. reminders are only
+   sent for demos within 48 hours. Then a fix should work well.
+2. The parents: less keen parents pick late slots. Then a fix helps less.
+
+The 5 fixes:
+    Fix                                     Type          Ready in       Fits 2 weeks?
+    1. Book demos within 48h by default;    Process       3-5 days       Yes
+       a later slot needs a reason
+    2. WhatsApp reminders for demos         Messaging     7-10 days      Yes
+       booked more than 48h out
+    3. Daily sheet of late demos; reps      Spreadsheet   3-5 days       Yes
+       call to move them earlier
+    4. Score that ranks which demos may     Scoring       4-6 days       Yes, but adds
+       be no-shows                                                       little
+    5. AI chat on WhatsApp that confirms    AI agent      2-3 weeks      Probably not
+       and moves demos earlier
+
+Main catch for each:
+1. Reps may just write "parent asked" every time. Needs free early slots.
+2. Won't help if late demos already get the same reminders. Check first.
+3. Reps may skip the calls on busy days. Needs free early slots.
+4. There is almost nothing to rank: once past 48 hours, all late demos
+   are about the same. A simple "more than 48h" flag does the same job.
+5. Slowest and riskiest. Needs system connections and legal checks.
+
+How we would know a fix works:
+- Before starting, note today's numbers: 40% of demos booked late,
+  47% of late-booked parents come to the demo.
+- Give the fix to half of the late demos and not the other half, then
+  compare how many parents come.
+- With about 21 late demos a day, this needs about 3.5 to 4 weeks to
+  spot an improvement the size of the careful estimate from Phase 5.
+
+What I did NOT do:
+- Did not choose the final fix. That is Phase 7.
+
+Next step: Phase 7 - choose one fix and explain why the others were
+rejected.
