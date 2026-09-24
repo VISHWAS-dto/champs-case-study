@@ -8,14 +8,14 @@ Scope: stress-test the three Phase 3 candidates. Still no solution and no ₹ si
 
 | candidate                                              | step | observed gap              | 95% CI            | selection-aware p | adjusted OR [95% CI] | evidence   |
 | ------------------------------------------------------ | ---- | ------------------------- | ----------------- | ----------------: | -------------------- | ---------- |
-| A. Demo booked more than 48h after the lead arrived    | J/S  | 46.9% vs 74.9% (-28.0 pp) | [-31.3, -24.7] pp |            <0.001 | 0.27 [0.23, 0.32]    | **Strong** |
-| B. India + Vietnam convert less after a completed demo | V/C  | 11.2% vs 23.4% (-12.2 pp) | [-15.7, -8.4] pp  |            <0.001 | 0.39 [0.29, 0.54]    | **Strong** |
-| C. DSA leads convert less after a completed demo       | V/C  | 11.1% vs 21.3% (-10.2 pp) | [-14.5, -4.4] pp  |             0.002 | 0.46 [0.28, 0.75]    | **Weak**   |
+| A. Demo booked more than 48h after the lead arrived    | J/S  | 46.9% vs 74.9% (-28.0 pp) | [-31.3, -24.7] pp |            <0.001 | 0.29 [0.25, 0.34]    | **Strong** |
+| B. India + Vietnam convert less after a completed demo | V/C  | 11.2% vs 23.4% (-12.2 pp) | [-15.7, -8.4] pp  |            <0.001 | 0.41 [0.30, 0.56]    | **Strong** |
+| C. DSA leads convert less after a completed demo       | V/C  | 11.1% vs 21.3% (-10.2 pp) | [-14.5, -4.4] pp  |             0.002 | 0.47 [0.29, 0.76]    | **Weak**   |
 
 **Bottom line.** A and B hold up under every check. C does not.
 
-- **A. Late demo → no-show: Strong.** Demos set more than 48h after the lead arrived are joined 46.9% of the time vs 74.9% (-28.0 pp). The gap points the same way in every source, geography, local-hour band, shift, rep, follow-up band, half-month and week, and dropping any single group moves it by at most 1.6 pp. It survives adjustment for every measured variable (OR 0.27), and a re-run of the threshold search on shuffled data never gets close (p <0.001). These demos make up 39.8% of scheduled demos and 58.3% of all no-shows.
-- **B. India + Vietnam post-demo conversion: Strong.** V/C 11.2% vs 23.4% (-12.2 pp). It is lower than *each* of the other six geographies individually, the same in every source, shift and rep, and it survives adjustment (OR 0.39) and the pooling-was-chosen-after-looking permutation test (p <0.001). The association is solid. **Whether it is an operational leak is not**: nothing in the file can tell a sales-process failure apart from price or market fit.
+- **A. Late demo → no-show: Strong.** Demos set more than 48h after the lead arrived are joined 46.9% of the time vs 74.9% (-28.0 pp). The gap points the same way in every source, geography, local-hour band, shift, rep, follow-up band, half-month and week, and dropping any single group moves it by at most 1.6 pp. It survives adjustment for pre-exposure variables (source, geography, rep, month, lead weekday; OR 0.29), and a re-run of the threshold search on shuffled data never gets close (p <0.001). These demos make up 39.8% of scheduled demos and 58.3% of all no-shows.
+- **B. India + Vietnam post-demo conversion: Strong.** V/C 11.2% vs 23.4% (-12.2 pp). It is lower than *each* of the other six geographies individually, the same in every source, shift and rep, and it survives adjustment (OR 0.41) and the pooling-was-chosen-after-looking permutation test (p <0.001). The association is solid. **Whether it is an operational leak is not**: nothing in the file can tell a sales-process failure apart from price or market fit.
 - **C. DSA post-demo conversion: Weak.** The overall gap (-10.2 pp) passes the selection-aware test (p 0.002), but it rests on 20 conversions. It is concentrated in one shift (US: 6.4% vs 15.0% on IST) and one half-month (1–15 June: 1 of 52 converted). Drop either one and the gap is no longer significant. In July alone it is -6.3 pp with a CI that includes 0.
 - **Most defensible operational problem:** A — the wait between lead arrival and demo (section 6). It is the only candidate that is strong, large, spread across the whole operation and located at a step the sales team controls. Causation is **not** shown: an unmeasured factor such as parent intent would need a risk ratio of ≥2.6 with both late booking and no-show to explain it away. That is possible, so it needs testing before anyone relies on it.
 
@@ -28,7 +28,7 @@ Scope: stress-test the three Phase 3 candidates. Still no solution and no ₹ si
 - **Check 7 (one small group driving it).** Leave-one-out: drop each source, geography, rep, shift, follow-up band and half-month in turn and recompute. Also: what share of the shortfall comes from each stratum compared with its share of the exposed group.
 - **Check 8 (time).** June vs July, four half-months, and weeks for A.
 - **Check 9 (sample size).** Events in the exposed group; minimum detectable effect (MDE) at 80% power, both at α 0.05 and at the Holm-level threshold of a 204-test screen. And a **selection-aware permutation test**: every candidate was found by searching (A: a threshold was picked from a scan; B: the two worst geographies were pooled after looking; C: the worst of six sources was picked). The test re-runs that same search on 5,000 shuffled copies of the data and asks how often chance alone finds something as extreme. This is the honest p-value for each candidate; ordinary p-values overstate it.
-- **Check 10 (confounding).** Covariate balance (standardised mean difference, SMD; >0.1 = imbalanced), extra strata (weekday, hour, and the other candidates), logistic regression with all measured variables, and an E-value: how strongly an *unmeasured* confounder would need to be tied to both the exposure and the outcome (as a risk ratio) to fully explain the gap away.
+- **Check 10 (confounding).** Covariate balance (standardised mean difference, SMD; >0.1 = imbalanced), extra strata (weekday, hour, and the other candidates), logistic regression adjusted for pre-exposure variables (source, geography, rep, month, lead weekday; follow-ups and demo weekday only in a labelled sensitivity row, as they can be consequences of a far-off demo), and an E-value: how strongly an *unmeasured* confounder would need to be tied to both the exposure and the outcome (as a risk ratio) to fully explain the gap away.
 
 **How evidence is graded** (the same rubric for all three; section 5 shows every criterion):
 
@@ -236,18 +236,19 @@ Gap within strata of other possible confounders:
 
 Logistic regression (outcome = J/S):
 
-| adjusted for                                | covariate terms | odds ratio | 95% CI       |      p | avg. marginal effect |
-| ------------------------------------------- | --------------: | ---------: | ------------ | -----: | -------------------: |
-| none                                        |               0 |       0.30 | [0.25, 0.34] | <0.001 |             -28.0 pp |
-| source/geography, rep (absorbs shift)       |              23 |       0.29 | [0.25, 0.34] | <0.001 |             -28.0 pp |
-| + follow-ups, month, created & demo weekday |              42 |       0.27 | [0.23, 0.32] | <0.001 |             -29.3 pp |
+| adjusted for                                                          | covariate terms | odds ratio | 95% CI       |      p | avg. marginal effect |
+| --------------------------------------------------------------------- | --------------: | ---------: | ------------ | -----: | -------------------: |
+| none                                                                  |               0 |       0.30 | [0.25, 0.34] | <0.001 |             -28.0 pp |
+| source/geography, rep (absorbs shift)                                 |              23 |       0.29 | [0.25, 0.34] | <0.001 |             -28.0 pp |
+| **pre-exposure: + month, lead weekday (headline)**                    |              30 |       0.29 | [0.25, 0.34] | <0.001 |             -28.1 pp |
+| sensitivity only: + follow-ups, demo weekday (possibly post-exposure) |              42 |       0.27 | [0.23, 0.32] | <0.001 |             -29.3 pp |
 
 Risk ratio 0.63. **E-value 2.57** (for the CI limit: 2.36): an unmeasured confounder would need a risk ratio of at least 2.57 with both >48h status and the outcome — beyond everything adjusted for above — to fully explain the gap.
 
 **Reading the evidence**
 
 - **Observed fact.** 1,285 of 3,229 scheduled demos (39.8%) were set more than 48h after lead creation; 46.9% were joined vs 74.9% for the rest. These late demos hold 682 of the 1,169 no-shows (58.3%). Right around the threshold (36–48h vs 48–60h) join rate falls from 79.5% to 42.4% (-37.2 pp, CI [-50.4, -22.3]). Late demos that *are* joined complete (87.9% vs 86.2%) and convert (23.2% vs 19.0%, p 0.045) at least as well as early ones.
-- **Observed fact.** Late booking is spread evenly across source, geography, shift, rep, month and weekday (all SMD ≤ 0.1). The one imbalance is follow-up attempts (SMD 0.39: 0 (8% vs 22%)), and the gap gets slightly *bigger* once follow-ups are held fixed.
+- **Observed fact.** Late booking is spread evenly across source, geography, shift, rep, month and weekday (all SMD ≤ 0.1). The one imbalance is follow-up attempts (SMD 0.39: 0 (8% vs 22%)). Follow-ups can be a consequence of a far-off demo (more days to chase), so they are kept out of the headline model and shown only as a sensitivity row.
 - **Inference.** Because the gap is the same size in every rep, shift, market and source, it looks like a property of the booking process, not of one team or one audience. Late joiners convert just as well, which fits "the same parents, fewer of whom turn up" better than "a less interested group of parents".
 - **Inference.** The drop is a *step* at ~48h rather than a steady decline. That shape suggests a rule or process boundary — for example, reminders or confirmations that only run for demos inside a 48h window — or an artefact of how the data was generated. The file cannot tell which.
 - **Assumption (untested).** That the delay causes the no-show. The other direction is plausible: parents with low intent may pick far-off slots or be hard to reach. Intent is not in the data. The E-value (2.57; 2.36 for the CI limit) says how strong such a factor would need to be. That is large but not implausible for intent.
@@ -442,11 +443,12 @@ Gap within strata of other possible confounders:
 
 Logistic regression (outcome = V/C):
 
-| adjusted for                                           | covariate terms | odds ratio | 95% CI       |      p | avg. marginal effect |
-| ------------------------------------------------------ | --------------: | ---------: | ------------ | -----: | -------------------: |
-| none                                                   |               0 |       0.41 | [0.30, 0.56] | <0.001 |             -12.2 pp |
-| source/geography, rep (absorbs shift)                  |              16 |       0.41 | [0.30, 0.56] | <0.001 |             -12.2 pp |
-| + follow-ups, month, created & demo weekday, demo >48h |              36 |       0.39 | [0.29, 0.54] | <0.001 |             -12.5 pp |
+| adjusted for                                                                     | covariate terms | odds ratio | 95% CI       |      p | avg. marginal effect |
+| -------------------------------------------------------------------------------- | --------------: | ---------: | ------------ | -----: | -------------------: |
+| none                                                                             |               0 |       0.41 | [0.30, 0.56] | <0.001 |             -12.2 pp |
+| source/geography, rep (absorbs shift)                                            |              16 |       0.41 | [0.30, 0.56] | <0.001 |             -12.2 pp |
+| **pre-exposure: + month, lead weekday (headline)**                               |              23 |       0.41 | [0.30, 0.56] | <0.001 |             -12.2 pp |
+| sensitivity only: + follow-ups, demo weekday, demo >48h (possibly post-exposure) |              36 |       0.39 | [0.29, 0.54] | <0.001 |             -12.5 pp |
 
 Risk ratio 0.48. **E-value 3.60** (for the CI limit: 2.56): an unmeasured confounder would need a risk ratio of at least 3.60 with both India+VN status and the outcome — beyond everything adjusted for above — to fully explain the gap.
 
@@ -645,11 +647,12 @@ Gap within strata of other possible confounders:
 
 Logistic regression (outcome = V/C):
 
-| adjusted for                                           | covariate terms | odds ratio | 95% CI       |     p | avg. marginal effect |
-| ------------------------------------------------------ | --------------: | ---------: | ------------ | ----: | -------------------: |
-| none                                                   |               0 |       0.46 | [0.29, 0.75] | 0.002 |             -10.2 pp |
-| source/geography, rep (absorbs shift)                  |              18 |       0.47 | [0.29, 0.76] | 0.002 |              -9.9 pp |
-| + follow-ups, month, created & demo weekday, demo >48h |              38 |       0.46 | [0.28, 0.75] | 0.002 |             -10.0 pp |
+| adjusted for                                                                     | covariate terms | odds ratio | 95% CI       |     p | avg. marginal effect |
+| -------------------------------------------------------------------------------- | --------------: | ---------: | ------------ | ----: | -------------------: |
+| none                                                                             |               0 |       0.46 | [0.29, 0.75] | 0.002 |             -10.2 pp |
+| source/geography, rep (absorbs shift)                                            |              18 |       0.47 | [0.29, 0.76] | 0.002 |              -9.9 pp |
+| **pre-exposure: + month, lead weekday (headline)**                               |              25 |       0.47 | [0.29, 0.76] | 0.002 |              -9.9 pp |
+| sensitivity only: + follow-ups, demo weekday, demo >48h (possibly post-exposure) |              38 |       0.46 | [0.28, 0.75] | 0.002 |             -10.0 pp |
 
 Risk ratio 0.52. **E-value 3.24** (for the CI limit: 1.82): an unmeasured confounder would need a risk ratio of at least 3.24 with both DSA status and the outcome — beyond everything adjusted for above — to fully explain the gap.
 
@@ -674,9 +677,9 @@ Risk ratio 0.52. **E-value 3.24** (for the CI limit: 1.82): an unmeasured confou
 |   4 | No single group drives it (drop any one source/geo/rep/shift/follow-up band/period) | pass   | weakest: drop US_SHIFT -> -26.5 pp (p <0.001)                                   |
 |   5 | Stable across June and July (both months CI excl. 0; half-months homogeneous)       | pass   | Jun -29.6 pp; Jul -26.4 pp; half-months same sign 4/4, heterogeneity p 0.403    |
 |   6 | Sample large enough (exposed outcomes >=50; MDE at Holm level <= observed gap)      | pass   | 603 events in 1,285; MDE 4.4 pp (alpha 0.05) / 7.0 pp (Holm-level)              |
-|   7 | Survives adjustment for measured confounders                                        | pass   | adjusted effect keeps 104% of raw; OR 0.27 [0.23, 0.32]; E-value 2.57 (CI 2.36) |
+|   7 | Survives adjustment for pre-exposure variables                                      | pass   | adjusted effect keeps 100% of raw; OR 0.29 [0.25, 0.34]; E-value 2.57 (CI 2.36) |
 
-**Why Strong.** Every criterion is passed with room to spare. The gap is ~4× the smallest effect detectable even at a Holm-level threshold; it is present in 100% of strata; no subgroup, week or month is needed for it; and adjustment makes it slightly larger. The only thing holding it back from a causal claim is an *unmeasured* confounder (intent), which statistics on this file cannot rule out.
+**Why Strong.** Every criterion is passed with room to spare. The gap is ~4× the smallest effect detectable even at a Holm-level threshold; it is present in 100% of strata; no subgroup, week or month is needed for it; and adjustment for pre-exposure variables leaves it unchanged. The only thing holding it back from a causal claim is an *unmeasured* confounder (intent), which statistics on this file cannot rule out.
 
 ### B. India + Vietnam convert less after a completed demo — **Strong**
 
@@ -688,7 +691,7 @@ Risk ratio 0.52. **E-value 3.24** (for the CI limit: 1.82): an unmeasured confou
 |   4 | No single group drives it (drop any one source/geo/rep/shift/follow-up band/period) | pass   | weakest: drop US_SHIFT -> -10.6 pp (p <0.001)                                   |
 |   5 | Stable across June and July (both months CI excl. 0; half-months homogeneous)       | pass   | Jun -11.9 pp; Jul -12.6 pp; half-months same sign 4/4, heterogeneity p 0.712    |
 |   6 | Sample large enough (exposed outcomes >=50; MDE at Holm level <= observed gap)      | pass   | 52 events in 464; MDE 6.4 pp (alpha 0.05) / 10.3 pp (Holm-level)                |
-|   7 | Survives adjustment for measured confounders                                        | pass   | adjusted effect keeps 102% of raw; OR 0.39 [0.29, 0.54]; E-value 3.60 (CI 2.56) |
+|   7 | Survives adjustment for pre-exposure variables                                      | pass   | adjusted effect keeps 100% of raw; OR 0.41 [0.30, 0.56]; E-value 3.60 (CI 2.56) |
 
 **Why Strong.** Every criterion is passed. Its weaknesses from Phase 3 are dealt with: the post-hoc pooling of India and Vietnam is covered by the permutation test (which searched all 36 single geographies and pairs), and the comparison is not inflated by the USA. **The grade is for the association, not the lever.** As an *operational* leak it is much weaker, because nothing observed separates a process failure from price or market fit.
 
@@ -702,7 +705,7 @@ Risk ratio 0.52. **E-value 3.24** (for the CI limit: 1.82): an unmeasured confou
 |   4 | No single group drives it (drop any one source/geo/rep/shift/follow-up band/period) | fail    | weakest: drop US_SHIFT -> -5.7 pp (p 0.172)                                    |
 |   5 | Stable across June and July (both months CI excl. 0; half-months homogeneous)       | partial | Jun -13.8 pp; Jul -6.3 pp; half-months same sign 4/4, heterogeneity p 0.014    |
 |   6 | Sample large enough (exposed outcomes >=50; MDE at Holm level <= observed gap)      | fail    | 20 events in 180; MDE 9.0 pp (alpha 0.05) / 14.5 pp (Holm-level)               |
-|   7 | Survives adjustment for measured confounders                                        | pass    | adjusted effect keeps 98% of raw; OR 0.46 [0.28, 0.75]; E-value 3.24 (CI 1.82) |
+|   7 | Survives adjustment for pre-exposure variables                                      | pass    | adjusted effect keeps 97% of raw; OR 0.47 [0.29, 0.76]; E-value 3.24 (CI 1.82) |
 
 **Why Weak.** It passes the permutation test and survives adjustment, so it is unlikely to be pure noise. But it fails two criteria. (1) **One small group drives it**: removing US_SHIFT or the first half of June makes it non-significant. (2) **Sample size**: 20 conversions, and a Holm-level MDE of 14.5 pp that is larger than the observed gap. It is also unstable over time (clear in June, CI includes 0 in July). Treat it as a hypothesis to re-check on more data, not as a finding.
 
@@ -710,16 +713,16 @@ Risk ratio 0.52. **E-value 3.24** (for the CI limit: 1.82): an unmeasured confou
 
 **The problem: a large share of demos are booked too far out, and those demos are mostly no-shows.**
 
-| type          | statement                                                                                                                                                                                       |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Observed fact | 39.8% of scheduled demos (1,285 in two months) are set more than 48h after the lead arrives.                                                                                                    |
-| Observed fact | Those demos are joined 46.9% of the time vs 74.9% for demos within 48h; they account for 58.3% of all no-shows.                                                                                 |
-| Observed fact | The gap is the same across every source, market, timezone, local hour, shift, rep, follow-up level, half-month and week. It survives adjustment for all of them (OR 0.27 [0.23, 0.32]).         |
-| Observed fact | Leads whose demo was late but who did join convert at least as well as early ones.                                                                                                              |
-| Inference     | This behaves like a process-level property of how demos are booked, not a people or market problem, and it sits at a step the sales operation controls (when the demo happens).                 |
-| Inference     | The sharp step at ~48h suggests a process boundary (reminders, confirmation or slot-release rules) worth checking in the CRM.                                                                   |
-| Assumption    | That moving demos inside 48h would recover a meaningful share of the join-rate gap. This is **not** shown. Low-intent parents choosing far slots would produce the same pattern (E-value 2.57). |
-| Assumption    | `demo_scheduled_at` is the demo slot as first booked, and slot timing is at least partly under the company's control.                                                                           |
+| type          | statement                                                                                                                                                                                          |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Observed fact | 39.8% of scheduled demos (1,285 in two months) are set more than 48h after the lead arrives.                                                                                                       |
+| Observed fact | Those demos are joined 46.9% of the time vs 74.9% for demos within 48h; they account for 58.3% of all no-shows.                                                                                    |
+| Observed fact | The gap is the same across every source, market, timezone, local hour, shift, rep, follow-up level, half-month and week. It survives adjustment for pre-exposure variables (OR 0.29 [0.25, 0.34]). |
+| Observed fact | Leads whose demo was late but who did join convert at least as well as early ones.                                                                                                                 |
+| Inference     | This behaves like a process-level property of how demos are booked, not a people or market problem, and it sits at a step the sales operation controls (when the demo happens).                    |
+| Inference     | The sharp step at ~48h suggests a process boundary (reminders, confirmation or slot-release rules) worth checking in the CRM.                                                                      |
+| Assumption    | That moving demos inside 48h would recover a meaningful share of the join-rate gap. This is **not** shown. Low-intent parents choosing far slots would produce the same pattern (E-value 2.57).    |
+| Assumption    | `demo_scheduled_at` is the demo slot as first booked, and slot timing is at least partly under the company's control.                                                                              |
 
 **Why A and not B.** B is just as solid statistically, but its gap appears only at the payment decision and is the same whoever handles the lead. The data cannot attribute it to anything the sales operation does. It is a market/pricing question to hand to the business, not a defensible operational leak on this evidence.
 

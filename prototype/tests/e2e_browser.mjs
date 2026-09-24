@@ -76,37 +76,40 @@ check("page loads, logic script loads, 'as of' defaults to now", v.logic && /^\d
 v = await ev(`await T.click("runBtn"); return T.err()`);
 check("no file picked → clear error", v === "Pick a CRM export CSV first.", v);
 
-// 3. main workflow on the case CSV
-v = await ev(`await T.fileFrom("exportFile", "sample/case_export.csv");
+// 3. main workflow on the SYNTHETIC sample export (the confidential case CSV is not in the repository)
+v = await ev(`await T.fileFrom("exportFile", "sample/demo_export.csv");
   document.getElementById("asOf").value = "";
   await T.click("runBtn"); return T.err()`);
 check("empty 'Run as of' → clear error", /valid 'Run as of'/.test(v), v);
 v = await ev(`document.getElementById("asOf").value = "2026-07-15T09:00"; await T.click("runBtn");
   return { err: T.err(), stats: [...document.querySelectorAll("#daily .stat")].map(e => e.innerText) }`);
-check("build list: 92 flagged, 45/47, 27/18, IST 15 · US 10 · SEA 2",
-  !v.err && v.stats.join("|") === "92|45 / 47|27 / 18|IST_SHIFT 15 · US_SHIFT 10 · SEA_SHIFT 2", JSON.stringify(v));
-v = await ev(`const s = document.getElementById("repSel"); s.value = "AD-07"; s.onchange({ target: s });
+check("build list: 45 flagged, 12/33, 6/6, IST 2 · US 3 · SEA 1",
+  !v.err && v.stats.join("|") === "45|12 / 33|6 / 6|IST_SHIFT 2 · US_SHIFT 3 · SEA_SHIFT 1", JSON.stringify(v));
+v = await ev(`return [...document.querySelectorAll("#daily tbody tr")].filter(tr => tr.querySelector(".badge.MOVE"))
+  .map(tr => parseFloat(tr.cells[3].innerText))`);
+check("no MOVE row with less than 3h to the deadline", v.length > 0 && v.every((h) => h >= 3), JSON.stringify(v));
+v = await ev(`const s = document.getElementById("repSel"); s.value = "AD-02"; s.onchange({ target: s });
   return [...document.querySelectorAll("#daily tbody tr")].slice(0, 2).map(tr => [...tr.cells].slice(0, 5).map(c => c.innerText.replace(/\\n/g, " ")))`);
-check("rep AD-07 top rows match README", v[0][0].startsWith("L104265") && v[0][2].startsWith("Wed 15 Jul, 16:13") && v[0][3] === "0.2 h"
-  && v[1][0].startsWith("L102531") && v[1][4] === "Fri 17 Jul, 10:38", JSON.stringify(v));
+check("rep AD-02 top rows match README", v[0][0].startsWith("D51137") && v[0][2].startsWith("Wed 15 Jul, 20:46") && v[0][3] === "15.8 h"
+  && v[1][0].startsWith("D80653") && v[1][4] === "Sat 18 Jul, 00:54", JSON.stringify(v));
 v = await ev(`const rows = [...document.querySelectorAll("#daily tbody tr")]; return rows.length`);
 check("rep view shows only this rep's rescue rows", v > 0, v + " rows");
 await shot("01_daily_list");
 
 // 4. log an outcome
-v = await ev(`const sel = document.querySelector("select[data-lead='L104265']"); sel.value = "moved_before_deadline"; sel.onchange();
-  return { info: document.getElementById("logInfo").innerText, stored: JSON.parse(localStorage.getItem("rescueOutcomes.v1")).L104265 }`);
+v = await ev(`const sel = document.querySelector("select[data-lead='D51137']"); sel.value = "moved_before_deadline"; sel.onchange();
+  return { info: document.getElementById("logInfo").innerText, stored: JSON.parse(localStorage.getItem("rescueOutcomes.v1")).D51137 }`);
 check("picking an outcome saves it with a timestamp", v.stored?.outcome === "moved_before_deadline" && /^2026-07-15 09:0\d$/.test(v.stored.logged_at), JSON.stringify(v));
 
 // 5. threshold edited after the build must not break logging (bug B9)
-v = await ev(`document.getElementById("threshold").value = ""; const sel = document.querySelector("select[data-lead='L102531']");
+v = await ev(`document.getElementById("threshold").value = ""; const sel = document.querySelector("select[data-lead='D80653']");
   sel.value = "no_answer"; sel.onchange(); return { err: T.err(), stat: document.querySelector("#daily .stat + .muted").innerText }`);
 check("blank threshold after build: logging still works, header keeps 48h", !v.err && /48h/.test(v.stat), JSON.stringify(v));
 await ev(`document.getElementById("threshold").value = "48"; return 1`);
 
 // 6. outcome log merge: an older log must not overwrite a newer in-browser outcome (bug B8)
-v = await ev(`await T.setFile("logFile", "old.csv", "lead_id,outcome,logged_at\\nL104265,no_answer,2026-07-14 09:00\\n");
-  await T.click("runBtn"); return JSON.parse(localStorage.getItem("rescueOutcomes.v1")).L104265.outcome`);
+v = await ev(`await T.setFile("logFile", "old.csv", "lead_id,outcome,logged_at\\nD51137,no_answer,2026-07-14 09:00\\n");
+  await T.click("runBtn"); return JSON.parse(localStorage.getItem("rescueOutcomes.v1")).D51137.outcome`);
 check("loading an older outcome log keeps the newer outcome", v === "moved_before_deadline", v);
 
 // 7. simulated demo log + summary tab
@@ -118,11 +121,15 @@ await shot("02_summary");
 
 // 8. measurement
 v = await ev(`T.clearFile("logFile"); document.querySelector("[data-tab=measure]").click(); await T.click("measureBtn"); return T.text("measureOut")`);
-check("measurement tab runs and gives a verdict", /Verdict:/.test(v) && /Rescue \(odd ID\)\s+629/.test(v) && /Control \(even ID\)\s+656/.test(v), v.split("\n").slice(0, 6).join(" | "));
+check("measurement tab uses the first-seen register (MOVE-eligible primary) and gives a verdict",
+  /Verdict:/.test(v) && /Primary: MOVE-eligible stratum/.test(v) && /Secondary: every listed late demo/.test(v), v.split("\n").slice(0, 6).join(" | "));
 await shot("03_measurement");
 v = await ev(`localStorage.removeItem("rescueOutcomes.v1"); document.getElementById("clearLog").click(); document.getElementById("clearLog").click();
   await T.click("measureBtn"); return T.text("measureOut").split("\\n")[0]`);
 check("no outcomes → A/A verdict", /A\/A check/.test(v), v);
+v = await ev(`return T.text("measureOut")`);
+check("cleared register → readout falls back to all late demos (200 / 261)", /All late demos in the export/.test(v)
+  && /Rescue \(odd ID\)\s+200/.test(v) && /Control \(even ID\)\s+261/.test(v), v.split("\n").slice(0, 5).join(" | "));
 
 // 9. clear needs two clicks (bug B13)
 v = await ev(`const sel = document.querySelector("#daily select[data-lead]"); sel.value = "no_answer"; sel.onchange();
@@ -130,6 +137,19 @@ v = await ev(`const sel = document.querySelector("#daily select[data-lead]"); se
   document.getElementById("clearLog").click(); const after2 = Object.keys(JSON.parse(localStorage.getItem("rescueOutcomes.v1"))).length;
   return [after1, after2]`);
 check("'Clear saved outcomes' needs a second click", v[0] === 1 && v[1] === 0, JSON.stringify(v));
+
+// 9b. "Load sample data": one click, no file picker, synthetic data, simulated pilot readout
+v = await ev(`T.clearFile("exportFile"); T.clearFile("logFile"); document.querySelector("[data-tab=daily]").click();
+  document.getElementById("sampleBtn").click(); await new Promise(r => setTimeout(r, 800));
+  const stats = [...document.querySelectorAll("#daily .stat")].map(e => e.innerText);
+  document.querySelector("[data-tab=measure]").click(); await T.click("measureBtn");
+  return { err: T.err(), stats, warn: T.text("daily").includes("SYNTHETIC"), m: T.text("measureOut"),
+    reg: Object.keys(JSON.parse(localStorage.getItem("rescueFirstSeen.v1"))).length }`);
+check("'Load sample data' builds the list, warns SYNTHETIC, and the readout says Extend",
+  !v.err && v.stats[0] === "45" && v.warn && v.reg > 300 && /Verdict:\s*Extend the pilot/.test(v.m) && /Rescue \(odd ID\)\s+164/.test(v.m),
+  JSON.stringify({ err: v.err, stats: v.stats, reg: v.reg, m: v.m.split("\n").slice(0, 3).join(" | ") }));
+await shot("05_sample_measurement");
+await ev(`document.getElementById("clearLog").click(); document.getElementById("clearLog").click(); return 1`);
 
 // 10. invalid inputs
 T_bad: {
@@ -161,7 +181,7 @@ check("HTML in CSV fields is shown as text, never executed", !v.xss && v.imgs ==
 
 // 12. phone width: no horizontal page scroll
 await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
-v = await ev(`await T.fileFrom("exportFile", "sample/case_export.csv"); await T.click("runBtn"); document.querySelector("[data-tab=daily]").click();
+v = await ev(`await T.fileFrom("exportFile", "sample/demo_export.csv"); await T.click("runBtn"); document.querySelector("[data-tab=daily]").click();
   await new Promise(r => setTimeout(r, 200)); return [document.documentElement.scrollWidth, innerWidth]`);
 check("phone width (390px): no horizontal page scroll", v[0] <= v[1], JSON.stringify(v));
 await shot("04_phone");

@@ -420,4 +420,39 @@ Important:
 What I did NOT do:
 - Did not add new numbers or new analysis.
 
-This is the last phase.
+(Phase 11 was planned as the last phase. Phases 13 and 14 below came after a final review.)
+
+======================================================================
+PHASE 13 - Final evaluator review
+======================================================================
+
+A strict review of the whole submission against the assignment PDF.
+Main findings: the Rs 7.8 lakh was the value of the leak, not what the
+fix would capture; the test's stop rule would kill a working fix; the
+biggest funnel drops were not compared in rupees; some wording claimed
+more than the data shows; the public repo held the confidential files.
+
+======================================================================
+PHASE 14 - Final submission fixes
+======================================================================
+
+What changed:
+- Money: Rs 7.8 lakh a month is now called the value of the leak. What
+  the fix itself captures is lower: about +3 points of join rate, about
+  Rs 1.9 lakh a month, using rates that are guesses (80% worked in time
+  x 60% parents reached x 50% accept an earlier slot). Phase 5 sec 10-11.
+- Comparison: every big funnel drop is sized the same way. Never-booked
+  and left-early have no gap to close; India + Vietnam (Rs 17.0 lakh)
+  is similar in size but looks like price, not sales process.
+- Test rule: scale if the low end of the range is above 0; stop only if
+  the high end is below +3 points; otherwise keep testing. The main
+  comparison uses demos that could still be moved (3h or more left).
+- Adjustment: now uses only facts known when the lead arrives. Result
+  OR 0.29 (was 0.27 with follow-ups, which can be a result of a late demo).
+- Wording: "demo slot more than 48h after the lead", not "booked more
+  than 48h". Day 1 reminder-rule check, Day 3 slot check (go/no-go),
+  displacement guardrail (late share stays at or below 39.8%).
+- Tool: MOVE only with 3h or more left; a first-seen register keeps each
+  demo in its group even after it is moved; "Load sample data" button
+  with made-up data; runbook of who does what in prototype/README.md.
+- Repo: the case PDF and CSV are no longer in the repository.

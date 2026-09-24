@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from phase_02_funnel_analysis import load, resolve_csv, stage_counts  # noqa: E402
 from phase_03_leak_analysis import BLUE, GRID, LATE_H, ORANGE, SURFACE, TEXT, TEXT_2, prepare  # noqa: E402
 from phase_04_leak_validation import ASCII_CELL, NUM_RE, newcombe  # noqa: E402
+from scipy.stats import norm  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_PATH = ROOT / "results" / "phase_05_financial_impact.md"
@@ -46,6 +47,13 @@ MONTHS = 2                 # dataset period
 # Modelling choices (stated as assumptions in the report).
 CAUSAL_SHARES = [0.25, 0.50, 0.75, 1.00]  # share of the observed join gap that a fix would recover
 PLANNING_SHARE = 0.50                     # the share used for the headline "modeled" figure
+
+# Lever capture (section 11). ILLUSTRATIVE ASSUMPTIONS, not observed in the data.
+CAPTURE_WORKED = 0.80   # rescue rows worked before the deadline (= the pilot's adoption guardrail)
+CAPTURE_CONTACT = 0.60  # parent answers the call / WhatsApp
+CAPTURE_ACCEPT = 0.50   # parent accepts an earlier slot before created_at + 48h
+MWE_PP = 0.03           # minimum worthwhile effect for the pilot decision rule (+3 pp J/S)
+PILOT_N_PER_ARM = 300   # ~4 weeks at ~21 late demos a day, half held out
 
 
 # --------------------------------------------------------------------------- formatting
@@ -275,6 +283,85 @@ def main():
                                                   *[f"{int(sh * 100)}% causal" for sh in CAUSAL_SHARES]]),
                       right=[f"{int(sh * 100)}% causal" for sh in CAUSAL_SHARES])
 
+    checks = []
+    # ------------------------------------------------------------------ funnel comparison (section 10)
+    # Every stage on one basis: close the gap between the weak group and an internal benchmark observed
+    # in the same file, carry extra customers through the observed later-step rates, x Rs 60,000 / 2.
+    unsched = leads - counts[1]
+    c_all = df[df["completed"]]
+    iv_c, rest_c = c_all[c_all["india_vn"]], c_all[~c_all["india_vn"]]
+    iv_gap = rest_c["converted_f"].mean() - iv_c["converted_f"].mean()
+    iv_cust = len(iv_c) * iv_gap
+    sl_by_seg = pd.concat([df.groupby(col)["scheduled"].mean() for col in
+                           ("lead_source", "geography", "rep_shift")])
+    cj_by_seg = pd.concat([s[s["joined"]].groupby(col)["completed"].mean() for col in
+                           ("lead_source", "geography", "rep_shift")])
+    vs_all = customers / counts[1]
+    compare_t = md_table(pd.DataFrame([
+        ["Never booked (S/L)", f"{unsched:,} leads",
+         f"none: S/L {pc(sl_by_seg.min())}-{pc(sl_by_seg.max())} across sources, geographies and shifts; "
+         "no segment survives correction (Phase 3)",
+         "not sizable on a benchmark basis",
+         f"Not selected. Largest raw drop, but no column explains it, so there is nothing to target in two "
+         f"weeks. (Naive bound if every one booked: {unsched:,} x {pc(vs_all)} V/S = {unsched * vs_all:.0f} "
+         f"customers, {lakh(unsched * vs_all * REV_PER_CUSTOMER / MONTHS)}/month; not a benchmark gap.)"],
+        [f"No-show, demo slot >{LATE_H}h after lead (J/S)", f"{late['n']:,} demos ({late['n'] - late['j']:,} no-shows)",
+         f"{gap * 100:.1f} pp vs <={LATE_H}h demos ({pc(late['js'])} vs {pc(early['js'])})",
+         f"{lakh(ceil['rev'] / MONTHS)} ceiling; {lakh(plan['rev'] / MONTHS)} causal planning case",
+         "**Selected.** Strong in every subgroup; sits at a step sales ops control (which slot is offered); "
+         "~21 demos a day can be worked by existing reps from a daily export, with no engineering."],
+        ["Left demo early (C/J)", f"{counts[2] - counts[3]:,} joiners",
+         f"none: C/J {pc(cj_by_seg.min())}-{pc(cj_by_seg.max())} across segments; no survivor in Phase 3",
+         "not sizable on a benchmark basis", "Not selected. Small and flat; no lever visible in the data."],
+        ["Did not buy after demo, India + Vietnam (V/C)", f"{len(iv_c):,} completers",
+         f"{iv_gap * 100:.1f} pp vs the other six geographies ({pc(iv_c['converted_f'].mean())} vs "
+         f"{pc(rest_c['converted_f'].mean())})",
+         f"{lakh(iv_cust * REV_PER_CUSTOMER / MONTHS)} ceiling",
+         "Not selected. Similar ceiling, but identical across every rep and shift, so it looks like price or "
+         "market fit; a fix needs pricing or product decisions, not a two-week sales-ops change."],
+    ], columns=["stage", "lost at this step", "benchmark gap (observed)", "modeled ceiling per month",
+                "selected?"]))
+
+    # ------------------------------------------------------------------ lever capture and pilot (section 11)
+    effect_moved = gap_lo * PLANNING_SHARE                    # causal J/S lift on a demo actually moved
+    reach = CAPTURE_WORKED * CAPTURE_CONTACT
+    moved_share = reach * CAPTURE_ACCEPT
+    itt = moved_share * effect_moved                          # expected lift over ALL late demos
+    per_pp_month = late["n"] * 0.01 * early["vj"] * REV_PER_CUSTOMER / MONTHS
+    capture_month = itt * 100 * per_pp_month
+    p0 = late["js"]
+    z_a, z_b = norm.ppf(0.975), norm.ppf(0.80)
+    se_pilot = np.sqrt(2 * p0 * (1 - p0) / PILOT_N_PER_ARM)
+    mde_pilot = (z_a + z_b) * se_pilot
+    power_at = lambda d: norm.sf(z_a - d / se_pilot)  # noqa: E731
+    n_for_mwe = 2 * p0 * (1 - p0) * ((z_a + z_b) / MWE_PP) ** 2
+    ci_half = z_a * se_pilot
+    capture_t = md_table(pd.DataFrame([
+        ["Rows worked before the deadline", "**assumption** (= the 80% adoption guardrail)", pc(CAPTURE_WORKED, 0)],
+        ["Parent reached", "**assumption**", pc(CAPTURE_CONTACT, 0)],
+        ["Reach", f"{CAPTURE_WORKED} x {CAPTURE_CONTACT}", pc(reach, 0)],
+        ["Acceptance: parent takes a slot before created_at + 48h", "**assumption**", pc(CAPTURE_ACCEPT, 0)],
+        ["Effect on a demo that is moved", f"{gap_lo * 100:.2f} pp (lower CI) x {PLANNING_SHARE} causal share",
+         f"{effect_moved * 100:.1f} pp"],
+        ["**Expected lift over all late demos**", "reach x acceptance x effect", f"**{itt * 100:.1f} pp**"],
+        ["Value of 1 pp of J/S on late demos", f"{late['n']:,} x 1 pp x {early['vj']:.4f} x 60,000 / 2",
+         inr(per_pp_month) + "/month"],
+        ["**Expected lever capture, full rollout**", f"{itt * 100:.2f} x {inr(per_pp_month)}",
+         f"**{lakh(capture_month)}/month**"],
+    ], columns=["item", "source / formula", "value"]), right=("value",))
+    power_t = md_table(pd.DataFrame([
+        ["Pilot size", f"~{PILOT_N_PER_ARM} late demos per arm (~4 weeks)"],
+        ["Smallest lift detectable with 80% power (alpha 0.05, two-sided)", f"{mde_pilot * 100:.1f} pp"],
+        [f"Power to detect the minimum worthwhile effect (+{MWE_PP * 100:.0f} pp)", pc(power_at(MWE_PP), 0)],
+        [f"Power to detect the expected lever lift (+{itt * 100:.1f} pp)", pc(power_at(itt), 0)],
+        ["Half-width of the 95% CI on the difference", f"±{ci_half * 100:.1f} pp"],
+        [f"Late demos per arm for 80% power at +{MWE_PP * 100:.0f} pp", f"~{n_for_mwe:,.0f}"],
+    ], columns=["pilot design", "value"]))
+    checks.append(f"Lever capture = {pc(reach, 0)} reach x {pc(CAPTURE_ACCEPT, 0)} acceptance x "
+                  f"{effect_moved * 100:.1f} pp = {itt * 100:.2f} pp ({lakh(capture_month)}/month), below the "
+                  f"{lakh(plan['rev'] / MONTHS)}/month planning value of the leak")
+    assert capture_month < plan["rev"] / MONTHS
+
     # ------------------------------------------------------------------ charts
     FIG_DIR.mkdir(parents=True, exist_ok=True)
     gaps = [("lower 95% CI", gap_lo), ("point estimate", gap), ("upper 95% CI", gap_hi)]
@@ -287,7 +374,6 @@ def main():
          "Sensitivity of monthly modeled revenue to gap and causal share"], figs))
 
     # ------------------------------------------------------------------ verification
-    checks = []
     assert abs(early["vj"] - early["cj"] * early["vc"]) < 1e-12
     checks.append("V/J of the <=48h group equals C/J x V/C (the two-step and one-step routes agree)")
     assert abs(ceil["cust"] - late["n"] * gap * early["vj"]) < 1e-9
@@ -553,7 +639,41 @@ What *can* be said: over these two months the business made {inr(actual_rev)} of
 
 __FIGS__
 
-## 10. Verification performed by the script
+## 10. Funnel comparison on a common basis
+
+Each stage is sized the same way: close the gap between the weak group and an internal benchmark observed in this file, carry the extra customers through the observed later-step rates, and multiply by Rs 60,000 / 2 months. A stage with no benchmark gap has nothing to size or to target.
+
+{compare_t}
+
+**Why the late-demo leak.** It is the only stage with a large, strongly supported benchmark gap that the sales operation can move within two weeks. Which demo slot a parent is offered is decided by the sales team, the affected demos are identifiable on the day they are booked, and ~21 of them a day can be worked by the existing reps from a daily CRM export.
+
+## 11. Leak value vs lever capture
+
+**{lakh(plan['rev'] / MONTHS)}/month is the modeled causal value of the late-demo leak, not what the lever will capture.** The lever only acts on rescue rows a rep reaches before the deadline, and only where the parent accepts an earlier slot:
+
+```
+expected lift (all late demos) = reach x acceptance x effect on a moved demo
+```
+
+The rates below are **illustrative assumptions, not observed data.** Nobody in the file had a demo moved. The pilot measures them.
+
+{capture_t}
+
+A confirmation call on rows that are not moved is assumed to add nothing (conservative). During the pilot, half of the late demos are held out, so the capture in those four weeks is half of this.
+
+**Pilot power and decision rule.** The primary analysis is the **MOVE-eligible stratum**: late demos whose deadline (`created_at + 48h`) was still at least 3h away the first time they appeared on a daily list. Both arms are counted the same way, so the comparison stays randomised. All late demos are reported as a secondary ITT readout.
+
+{power_t}
+
+The 300-per-arm design has ~80% power only for a ~{mde_pilot * 100:.0f} pp effect. The decision rule, set in advance, uses a minimum worthwhile effect (MWE) of **+{MWE_PP * 100:.0f} pp**:
+
+- **Scale** if the lower bound of the 95% CI is above 0.
+- **Stop** only if the upper bound of the 95% CI is below +{MWE_PP * 100:.0f} pp.
+- **Otherwise extend** the pilot.
+
+Before any of these, fewer than 80% of rescue rows worked before the deadline means the pilot is testing adoption rather than the lever: fix adoption first. With a CI half-width of ±{ci_half * 100:.1f} pp at 4 weeks, "stop" needs an observed difference below about {(MWE_PP - ci_half) * 100:+.1f} pp, so the most likely week-4 result for a small true effect is **extend**. That is the intended behaviour: a cheap lever is not killed on an underpowered readout.
+
+## 12. Verification performed by the script
 
 """ + "\n".join(f"- {c}" for c in checks) + "\n"
 

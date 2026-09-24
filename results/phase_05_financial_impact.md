@@ -205,8 +205,64 @@ What *can* be said: over these two months the business made ₹2,17,20,000 of re
 
 ![Sensitivity of monthly modeled revenue to gap and causal share](figures/phase_05/03_sensitivity.png)
 
-## 10. Verification performed by the script
+## 10. Funnel comparison on a common basis
 
+Each stage is sized the same way: close the gap between the weak group and an internal benchmark observed in this file, carry the extra customers through the observed later-step rates, and multiply by Rs 60,000 / 2 months. A stage with no benchmark gap has nothing to size or to target.
+
+| stage                                         | lost at this step          | benchmark gap (observed)                                                                               | modeled ceiling per month                                | selected?                                                                                                                                                                                                              |
+| --------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Never booked (S/L)                            | 1,771 leads                | none: S/L 57.4%-67.4% across sources, geographies and shifts; no segment survives correction (Phase 3) | not sizable on a benchmark basis                         | Not selected. Largest raw drop, but no column explains it, so there is nothing to target in two weeks. (Naive bound if every one booked: 1,771 x 11.2% V/S = 199 customers, Rs 59.56 lakh/month; not a benchmark gap.) |
+| No-show, demo slot >48h after lead (J/S)      | 1,285 demos (682 no-shows) | 28.0 pp vs <=48h demos (46.9% vs 74.9%)                                                                | Rs 17.72 lakh ceiling; Rs 7.79 lakh causal planning case | **Selected.** Strong in every subgroup; sits at a step sales ops control (which slot is offered); ~21 demos a day can be worked by existing reps from a daily export, with no engineering.                             |
+| Left demo early (C/J)                         | 274 joiners                | none: C/J 80.8%-89.4% across segments; no survivor in Phase 3                                          | not sizable on a benchmark basis                         | Not selected. Small and flat; no lever visible in the data.                                                                                                                                                            |
+| Did not buy after demo, India + Vietnam (V/C) | 464 completers             | 12.2 pp vs the other six geographies (11.2% vs 23.4%)                                                  | Rs 17.04 lakh ceiling                                    | Not selected. Similar ceiling, but identical across every rep and shift, so it looks like price or market fit; a fix needs pricing or product decisions, not a two-week sales-ops change.                              |
+
+**Why the late-demo leak.** It is the only stage with a large, strongly supported benchmark gap that the sales operation can move within two weeks. Which demo slot a parent is offered is decided by the sales team, the affected demos are identifiable on the day they are booked, and ~21 of them a day can be worked by the existing reps from a daily CRM export.
+
+## 11. Leak value vs lever capture
+
+**₹7.79 lakh/month is the modeled causal value of the late-demo leak, not what the lever will capture.** The lever only acts on rescue rows a rep reaches before the deadline, and only where the parent accepts an earlier slot:
+
+```
+expected lift (all late demos) = reach x acceptance x effect on a moved demo
+```
+
+The rates below are **illustrative assumptions, not observed data.** Nobody in the file had a demo moved. The pilot measures them.
+
+| item                                                    | source / formula                              |                  value |
+| ------------------------------------------------------- | --------------------------------------------- | ---------------------: |
+| Rows worked before the deadline                         | **assumption** (= the 80% adoption guardrail) |                    80% |
+| Parent reached                                          | **assumption**                                |                    60% |
+| Reach                                                   | 0.8 x 0.6                                     |                    48% |
+| Acceptance: parent takes a slot before created_at + 48h | **assumption**                                |                    50% |
+| Effect on a demo that is moved                          | 24.65 pp (lower CI) x 0.5 causal share        |                12.3 pp |
+| **Expected lift over all late demos**                   | reach x acceptance x effect                   |             **3.0 pp** |
+| Value of 1 pp of J/S on late demos                      | 1,285 x 1 pp x 0.1640 x 60,000 / 2            |        Rs 63,236/month |
+| **Expected lever capture, full rollout**                | 2.96 x Rs 63,236                              | **Rs 1.87 lakh/month** |
+
+A confirmation call on rows that are not moved is assumed to add nothing (conservative). During the pilot, half of the late demos are held out, so the capture in those four weeks is half of this.
+
+**Pilot power and decision rule.** The primary analysis is the **MOVE-eligible stratum**: late demos whose deadline (`created_at + 48h`) was still at least 3h away the first time they appeared on a daily list. Both arms are counted the same way, so the comparison stays randomised. All late demos are reported as a secondary ITT readout.
+
+| pilot design                                                    | value                              |
+| --------------------------------------------------------------- | ---------------------------------- |
+| Pilot size                                                      | ~300 late demos per arm (~4 weeks) |
+| Smallest lift detectable with 80% power (alpha 0.05, two-sided) | 11.4 pp                            |
+| Power to detect the minimum worthwhile effect (+3 pp)           | 11%                                |
+| Power to detect the expected lever lift (+3.0 pp)               | 11%                                |
+| Half-width of the 95% CI on the difference                      | ±8.0 pp                            |
+| Late demos per arm for 80% power at +3 pp                       | ~4,344                             |
+
+The 300-per-arm design has ~80% power only for a ~11 pp effect. The decision rule, set in advance, uses a minimum worthwhile effect (MWE) of **+3 pp**:
+
+- **Scale** if the lower bound of the 95% CI is above 0.
+- **Stop** only if the upper bound of the 95% CI is below +3 pp.
+- **Otherwise extend** the pilot.
+
+Before any of these, fewer than 80% of rescue rows worked before the deadline means the pilot is testing adoption rather than the lever: fix adoption first. With a CI half-width of ±8.0 pp at 4 weeks, "stop" needs an observed difference below about -5.0 pp, so the most likely week-4 result for a small true effect is **extend**. That is the intended behaviour: a cheap lever is not killed on an underpowered readout.
+
+## 12. Verification performed by the script
+
+- Lever capture = 48% reach x 50% acceptance x 12.3 pp = 2.96 pp (₹1.87 lakh/month), below the ₹7.79 lakh/month planning value of the leak
 - V/J of the <=48h group equals C/J x V/C (the two-step and one-step routes agree)
 - Extra joins = 1,285 x (baseline - late rate) = (1,285 x baseline) - 603 actual joins
 - June + July computed separately (₹35,80,441) is within 5% of the pooled two-month ceiling (₹35,44,047)

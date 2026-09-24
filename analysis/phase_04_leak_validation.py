@@ -445,14 +445,20 @@ def main():
             m1, j1, m0, j0 = cell(g, e, o)
             r["months"][m] = two_prop(j1, m1, j0, m0)
             r["months_ci"][m] = newcombe(j1, m1, j0, m0)
-        covars = [x for x in ["lead_source", "geography", "rep_assigned", "fu_band", "month",
-                              "created_dow", "demo_dow", "late"] if x != e and x != cd["own"]]
+        # Headline model: pre-exposure variables only (fixed when the lead arrives). Follow-up attempts,
+        # demo weekday and demo >48h can be consequences of the exposure, so they enter only a labelled
+        # sensitivity model and never the headline odds ratio.
+        pre_covars = [x for x in ["lead_source", "geography", "rep_assigned", "month", "created_dow"]
+                      if x != e and x != cd["own"]]
+        post_covars = [x for x in ["fu_band", "demo_dow", "late"] if x != e]
         r["models"] = [("none", adjusted(f, e, o, [])),
-                       ("source/geography, rep (absorbs shift)", adjusted(f, e, o, [x for x in covars if x in (
+                       ("source/geography, rep (absorbs shift)", adjusted(f, e, o, [x for x in pre_covars if x in (
                            "lead_source", "geography", "rep_assigned")])),
-                       ("+ follow-ups, month, created & demo weekday" + (", demo >48h" if e != "late" else ""),
-                        adjusted(f, e, o, covars))]
-        r["covars"] = covars
+                       ("**pre-exposure: + month, lead weekday (headline)**", adjusted(f, e, o, pre_covars)),
+                       ("sensitivity only: + follow-ups, demo weekday" + (", demo >48h" if e != "late" else "")
+                        + " (possibly post-exposure)", adjusted(f, e, o, pre_covars + post_covars))]
+        r["full"] = r["models"][2][1]
+        r["covars"] = pre_covars
         r["evalue"] = e_value(k1, n1, k0, n0)
         p0 = k0 / n0
         r["mde"] = (mde(n1, n0, p0, norm.ppf(0.975)), mde(n1, n0, p0, norm.ppf(1 - 0.025 / N_SCREEN)))
@@ -512,11 +518,11 @@ def main():
                      f"{raw['k1']} events in {raw['n1']:,}; MDE {m95 * 100:.1f} pp (α 0.05) / "
                      f"{mholm * 100:.1f} pp (Holm-level)"))
         # 7. measured confounders
-        full = r["models"][-1][1]
+        full = r["full"]
         rawm = r["models"][0][1]
         kept = full["ame"] / rawm["ame"]
         rr, ev, ev_ci = r["evalue"]
-        crit.append(("Survives adjustment for measured confounders",
+        crit.append(("Survives adjustment for pre-exposure variables",
                      "pass" if kept >= 0.75 and full["hi"] < 1 else "partial" if kept >= 0.5 else "fail",
                      f"adjusted effect keeps {kept * 100:.0f}% of raw; OR {full['or_']:.2f} "
                      f"[{full['lo']:.2f}, {full['hi']:.2f}]; E-value {ev:.2f} (CI {ev_ci:.2f})"))
@@ -560,7 +566,7 @@ def main():
     rows = []
     for cd in cands:
         r = res[cd["key"]]
-        full = r["models"][-1][1]
+        full = r["full"]
         rows.append([f"{cd['key']}. {cd['title']}", cd["step"],
                      f"{pc(r['raw']['p1'])} vs {pc(r['raw']['p0'])} ({pp(r['raw']['diff'])})",
                      f"[{r['raw']['nlo'] * 100:+.1f}, {r['raw']['nhi'] * 100:+.1f}] pp",
@@ -594,8 +600,9 @@ def main():
       f"{N_PERM:,} shuffled copies of the data and asks how often chance alone finds something as extreme. "
       "This is the honest p-value for each candidate; ordinary p-values overstate it.")
     w("- **Check 10 (confounding).** Covariate balance (standardised mean difference, SMD; >0.1 = "
-      "imbalanced), extra strata (weekday, hour, and the other candidates), logistic regression with all "
-      "measured variables, and an E-value: how strongly an *unmeasured* confounder would need to be tied "
+      "imbalanced), extra strata (weekday, hour, and the other candidates), logistic regression adjusted for "
+      "pre-exposure variables (source, geography, rep, month, lead weekday; follow-ups and demo weekday only in "
+      "a labelled sensitivity row, as they can be consequences of a far-off demo), and an E-value: how strongly an *unmeasured* confounder would need to be tied "
       "to both the exposure and the outcome (as a risk ratio) to fully explain the gap away.")
     w("\n**How evidence is graded** (the same rubric for all three; section 5 shows every criterion):\n")
     w("- **Strong** — passes all seven criteria: selection-aware p < 0.01; gap ≥5 pp with CI excluding 0; "
@@ -878,7 +885,7 @@ def fill_narrative(text, cands, res, perm, grades, df, s, c):
     fu_smd = dict((lab, (v, which)) for lab, v, which in A["balance"])["Follow-up attempts"]
     n1, k1, n0, k0, dn, lon, hin = A["near"]
     ev = {k: res[k]["evalue"] for k in "ABC"}
-    full = {k: res[k]["models"][-1][1] for k in "ABC"}
+    full = {k: res[k]["full"] for k in "ABC"}
 
     iv = df[df["india_vn"]]
     rest = df[~df["india_vn"]]
@@ -906,8 +913,8 @@ def fill_narrative(text, cands, res, perm, grades, df, s, c):
 - **A. Late demo → no-show: {g['A']}.** Demos set more than {LATE_H}h after the lead arrived are joined \
 {pc(ra['p1'])} of the time vs {pc(ra['p0'])} ({pp(ra['diff'])}). The gap points the same way in every source, \
 geography, local-hour band, shift, rep, follow-up band, half-month and week, and dropping any single group \
-moves it by at most {max(abs(x - ra['diff']) for x in A['loo_range'][:2]) * 100:.1f} pp. It survives adjustment for every \
-measured variable (OR {full['A']['or_']:.2f}), and a re-run of the threshold search on shuffled data never gets \
+moves it by at most {max(abs(x - ra['diff']) for x in A['loo_range'][:2]) * 100:.1f} pp. It survives adjustment for \
+pre-exposure variables (source, geography, rep, month, lead weekday; OR {full['A']['or_']:.2f}), and a re-run of the threshold search on shuffled data never gets \
 close (p {fmt_p(perm['A']['p'])}). These demos make up {pc(ra['n1'] / len(s))} of scheduled demos and \
 {pc(noshow_late / noshow_all)} of all no-shows.
 - **B. India + Vietnam post-demo conversion: {g['B']}.** V/C {pc(rb['p1'])} vs {pc(rb['p0'])} \
@@ -935,8 +942,9 @@ testing before anyone relies on it."""
 {hin * 100:+.1f}]). Late demos that *are* joined complete ({pc(cj_late['p1'])} vs {pc(cj_late['p0'])}) and convert \
 ({pc(vc_late['p1'])} vs {pc(vc_late['p0'])}, p {fmt_p(vc_late['p'])}) at least as well as early ones.
 - **Observed fact.** Late booking is spread evenly across source, geography, shift, rep, month and weekday \
-(all SMD ≤ 0.1). The one imbalance is follow-up attempts (SMD {fu_smd[0]:.2f}: {fu_smd[1]}), and the gap gets \
-slightly *bigger* once follow-ups are held fixed.
+(all SMD ≤ 0.1). The one imbalance is follow-up attempts (SMD {fu_smd[0]:.2f}: {fu_smd[1]}). Follow-ups can be a \
+consequence of a far-off demo (more days to chase), so they are kept out of the headline model and shown only as a \
+sensitivity row.
 - **Inference.** Because the gap is the same size in every rep, shift, market and source, it looks like a \
 property of the booking process, not of one team or one audience. Late joiners convert just as well, which \
 fits "the same parents, fewer of whom turn up" better than "a less interested group of parents".
@@ -998,7 +1006,7 @@ tracking change. The file has no campaign or batch field."""
     why = {}
     why["A"] = (f"**Why {g['A']}.** Every criterion is passed with room to spare. The gap is ~{abs(ra['diff']) * 100 / (A['mde'][1] * 100):.0f}× "
                 "the smallest effect detectable even at a Holm-level threshold; it is present in 100% of strata; "
-                "no subgroup, week or month is needed for it; and adjustment makes it slightly larger. "
+                "no subgroup, week or month is needed for it; and adjustment for pre-exposure variables leaves it unchanged. "
                 "The only thing holding it back from a causal claim is an *unmeasured* confounder (intent), "
                 "which statistics on this file cannot rule out.")
     why["B"] = (f"**Why {g['B']}.** Every criterion is passed. Its weaknesses from Phase 3 are dealt with: the "
@@ -1035,7 +1043,7 @@ across the whole operation.*"""
         ["Observed fact", f"Those demos are joined {pc(ra['p1'])} of the time vs {pc(ra['p0'])} for demos within "
                           f"{LATE_H}h; they account for {pc(noshow_late / noshow_all)} of all no-shows."],
         ["Observed fact", f"The gap is the same across every source, market, timezone, local hour, shift, rep, "
-                          f"follow-up level, half-month and week. It survives adjustment for all of them (OR "
+                          f"follow-up level, half-month and week. It survives adjustment for pre-exposure variables (OR "
                           f"{full['A']['or_']:.2f} [{full['A']['lo']:.2f}, {full['A']['hi']:.2f}])."],
         ["Observed fact", f"Leads whose demo was late but who did join convert at least as well as early ones."],
         ["Inference", f"This behaves like a process-level property of how demos are booked, not a people or "

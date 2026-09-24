@@ -128,43 +128,45 @@ control log = CONTROL rows, recorded with the run timestamp, never shown to reps
 
 ## 7. Example input
 
-Case export, run as of **2026-07-15 09:00** (start of a shift), first rows as they appear in the file:
+> **Phase 14 update.** Row-level examples now come from the **synthetic** sample (`prototype/sample/demo_export.csv`), because the confidential case CSV is no longer in the repository. MOVE now also needs at least 3h before the deadline (otherwise CONFIRM). Counts on the case CSV are given where they are aggregate only.
+
+Synthetic export, run as of **2026-07-15 09:00** (start of a shift), example rows:
 
 ```csv
 lead_id,lead_source,geography,parent_timezone,created_at,demo_scheduled_at,rep_assigned,rep_shift,follow_up_attempts,demo_joined,demo_completed,converted
-L102531,...,Australia,Australia/Sydney,2026-07-13 12:54,2026-07-17 00:38,AD-07,IST_SHIFT,...
-L103615,...,USA,America/New_York,2026-07-13 14:51,2026-07-17 07:59,AD-01,US_SHIFT,...
-L102120,...,...,...,...,...,AD-07,...                       ← even ID → control
+D51137,DSA,USA,America/New_York,2026-07-14 00:46,2026-07-22 03:59,AD-02,US_SHIFT,...
+D80653,Meta,USA,America/New_York,2026-07-14 08:55,2026-07-18 04:54,AD-02,US_SHIFT,...
+D50682,Google,USA,America/New_York,2026-07-06 09:55,2026-07-16 09:17,AD-02,US_SHIFT,...   ← even ID → control
 ```
 
-(`demo_joined` / `demo_completed` / `converted` are present in the case file because it is historical. The daily view ignores them, as they would be blank in a live export.)
+(`demo_joined` / `demo_completed` / `converted` are present because the file is historical. The daily view ignores them, as they would be blank in a live export.)
 
 ---
 
 ## 8. Example output
 
-**Run summary** for 2026-07-15 09:00 [D, counted from the case CSV]:
+**Run summary** for 2026-07-15 09:00 [D, counted from the case CSV, with the 3h MOVE rule]:
 
 | | count |
 | --- | ---: |
-| Upcoming demos booked >48h after lead | 92 |
-| …deadline still open (MOVE) | 45 |
-| …deadline passed (CONFIRM only) | 47 |
-| Open rows → rescue arm (odd) / control (even) | 27 / 18 |
-| Rescue rows by shift (open): IST / US / SEA | 15 / 10 / 2 |
+| Upcoming demos, slot >48h after lead | 92 |
+| …≥3h to deadline (MOVE) | 43 |
+| …<3h or deadline passed (CONFIRM only) | 49 |
+| Open rows → rescue arm (odd) / control (even) | 25 / 18 |
+| Rescue rows by shift (open): IST / US / SEA | 14 / 9 / 2 |
 
-The 47 "CONFIRM only" rows are an artefact of running on a historical snapshot for the first time. In daily use each row is caught on the first run after booking, and [D] across June–July a 09:00 run finds on average **~42 rows with an open window (range 26–56)**, of which ~half go to reps.
+The 49 "CONFIRM only" rows are an artefact of running on a historical snapshot for the first time. In daily use each row is caught on the first run after booking, and [D] across June–July a 09:00 run finds on average **~42 rows with an open window (range 26–56)**, of which ~half go to reps.
 
-**Rep view: AD-07 (IST shift), top of list:**
+**Rep view: AD-02 (US shift), top of list** (synthetic sample):
 
 | lead | geo | deadline (parent local) | left | current slot (parent local) | action | outcome |
 | --- | --- | --- | ---: | --- | --- | --- |
-| L104265 | Vietnam | Wed 15 Jul, 16:13 (Asia/Ho_Chi_Minh) | 0.2 h | Sat 18 Jul, 23:33 | MOVE | ▾ |
-| L102531 | Australia | Wed 15 Jul, 22:54 (Australia/Sydney) | 3.9 h | Fri 17 Jul, 10:38 | MOVE | ▾ |
+| D51137 | USA | Wed 15 Jul, 20:46 (America/New_York) | 15.8 h | Tue 21 Jul, 23:59 | MOVE | ▾ |
+| D80653 | USA | Thu 16 Jul, 04:55 (America/New_York) | 23.9 h | Sat 18 Jul, 00:54 | MOVE | ▾ |
 
 Local times assume the export clock is UTC [A]. The page shows this assumption beside every time and the rep confirms the time with the parent in the call.
 
-Card script for L102531: *"We have an earlier slot for your child before Wed 15 Jul, 22:54 your time. Would [slot 1] or [slot 2] work?"* → if no: *"No problem, can I confirm you're all set for Fri 17 Jul, 10:38?"*
+Card script for D51137: *"We have an earlier slot for your child before Wed 15 Jul, 20:46 your time. Would [slot 1] or [slot 2] work?"* → if no: *"No problem, can I confirm you're all set for Tue 21 Jul, 23:59?"*
 
 **Measurement tab: sanity check on the case data** (an A/A test, since nobody was called in June–July) [D]:
 
@@ -229,7 +231,7 @@ prototype/
 ├── rescue_sheet.html          # THE deliverable. One file: HTML + CSS + JS, no dependencies.
 │                              #   Tabs: Daily list · Summary · Measurement · How to use
 ├── sample/
-│   ├── case_export.csv        # copy of the case CSV, used as the demo input
+│   ├── demo_export.csv        # SYNTHETIC export used as the demo input (Phase 14; the case CSV is not in the repo)
 │   └── rescue_outcomes_demo.csv  # small example log (clearly marked SIMULATED) to demo the
 │                              #   summary and measurement tabs
 ├── check_rescue_logic.py      # pandas re-implementation of §5; prints the §10A counts

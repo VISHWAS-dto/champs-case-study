@@ -1,13 +1,18 @@
 """Check the rescue-sheet rules with pandas, independently of the JavaScript.
 
 Re-implements Phase 8 §5 (flag, deadline, arm, action) and the A/A readout, and
-compares the counts with the Phase 8 §10A acceptance numbers. The page does not
-need this script; it exists so the JavaScript can be checked against pandas.
+compares the counts with the acceptance numbers below. The page does not need this
+script; it exists so the JavaScript can be checked against pandas.
+
+Default input is the SYNTHETIC sample (sample/demo_export.csv). The confidential case
+CSV is not in the repository; if it is placed at the repository root, its acceptance
+counts are checked too:  python3 prototype/check_rescue_logic.py BrightChamps_FDA_Case_Dataset.csv
 
 Usage:
     python3 prototype/check_rescue_logic.py [path/to/export.csv] [--as-of "2026-07-15 09:00"] [--rep AD-07]
 
-Exit code 0 if every acceptance check passes (only checked on the case CSV), 1 otherwise.
+Exit code 0 if every acceptance check passes (checked on the two known files at the default
+"as of"), 1 if any fails, 2 on bad input.
 """
 
 import argparse
@@ -18,22 +23,24 @@ import numpy as np
 import pandas as pd
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_CSV = HERE / "sample" / "case_export.csv"
+DEFAULT_CSV = HERE / "sample" / "demo_export.csv"
+CASE_CSV = HERE.parent / "BrightChamps_FDA_Case_Dataset.csv"  # local only; not committed
 DEFAULT_AS_OF = "2026-07-15 09:00"
 LATE_H = 48
+MIN_MOVE_H = 3  # MOVE only with at least this many hours left before the deadline
 REQUIRED = ["lead_id", "created_at", "demo_scheduled_at", "parent_timezone",
             "rep_assigned", "rep_shift", "geography", "demo_joined"]
 
-# Phase 8 §10A, for the case CSV run as of 2026-07-15 09:00.
+# Acceptance counts at 2026-07-15 09:00 (the JS tests assert the same numbers).
 EXPECTED = {
-    "late_demos": 1285,
-    "late_rescue": 629,
-    "late_control": 656,
-    "js_rescue": 0.464,
-    "js_control": 0.474,
-    "flagged": 92,
-    "move": 45,
-    "open_rescue": 27,
+    "demo_export.csv": {  # synthetic sample
+        "late_demos": 461, "late_rescue": 200, "late_control": 261,
+        "js_rescue": 0.460, "js_control": 0.441, "flagged": 45, "move": 12, "open_rescue": 6,
+    },
+    "BrightChamps_FDA_Case_Dataset.csv": {  # case data (Phase 8 §10A, with the 3h MOVE rule)
+        "late_demos": 1285, "late_rescue": 629, "late_control": 656,
+        "js_rescue": 0.464, "js_control": 0.474, "flagged": 92, "move": 43, "open_rescue": 25,
+    },
 }
 
 
@@ -80,7 +87,7 @@ def build_rescue_list(df, as_of, late_h=LATE_H):
     out = out[out["demo_scheduled_at"] > as_of].copy()
     out["deadline"] = out["created_at"] + pd.Timedelta(hours=late_h)
     hours_left = (out["deadline"] - as_of).dt.total_seconds() / 3600
-    out["action"] = np.where(hours_left > 0, "MOVE", "CONFIRM")  # decide before rounding, as the JS does
+    out["action"] = np.where(hours_left >= MIN_MOVE_H, "MOVE", "CONFIRM")  # decide before rounding, as the JS does
     out["hours_left"] = hours_left.round(1)
     out["action_order"] = (out["action"] == "CONFIRM").astype(int)
     return out.sort_values(["action_order", "deadline"]).drop(columns="action_order")
@@ -111,7 +118,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("csv", nargs="?", default=DEFAULT_CSV)
     ap.add_argument("--as-of", default=DEFAULT_AS_OF, help='export-clock time, e.g. "2026-07-15 09:00"')
-    ap.add_argument("--rep", default="AD-07", help="rep whose list to print")
+    ap.add_argument("--rep", default="AD-02", help="rep whose list to print")
     args = ap.parse_args(argv)
 
     try:
@@ -129,12 +136,14 @@ def main(argv=None):
     aa = aa_readout(df)
 
     print(f"Run as of {as_of:%Y-%m-%d %H:%M} on {Path(args.csv).name}")
-    print(f"  upcoming demos booked >{LATE_H}h after lead : {len(lst)}")
-    print(f"  ...deadline open (MOVE)                  : {len(open_)}")
-    print(f"  ...deadline passed (CONFIRM)             : {len(lst) - len(open_)}")
-    print(f"  open rows rescue / control               : {len(open_rescue)} / {len(open_) - len(open_rescue)}")
+    open_rescue_n = len(open_rescue)
+    for label, value in [(f"upcoming demos, slot >{LATE_H}h after lead", len(lst)),
+                         (f"...>={MIN_MOVE_H}h to deadline (MOVE)", len(open_)),
+                         (f"...<{MIN_MOVE_H}h or passed (CONFIRM)", len(lst) - len(open_)),
+                         ("open rows rescue / control", f"{open_rescue_n} / {len(open_) - open_rescue_n}")]:
+        print(f"  {label:<40}: {value}")
     by_shift = open_rescue["rep_shift"].value_counts().to_dict()
-    print(f"  open rescue rows by shift                : {by_shift}")
+    print(f"  {'open rescue rows by shift':<40}: {by_shift}")
 
     rep_rows = lst[(lst["arm"] == "RESCUE") & (lst["rep_assigned"] == args.rep)].head(5)
     print(f"\nRep view {args.rep} (top 5, deadline in export clock):")
@@ -142,13 +151,13 @@ def main(argv=None):
         print(f"  {r.lead_id}  {r.geography:<12} deadline {r.deadline:%Y-%m-%d %H:%M}  "
               f"{r.hours_left:>6.1f} h  {r.action}")
 
-    print("\nA/A readout (all late demos in the file, nobody was called):")
+    print("\nA/A readout (every late demo in the export; outcome log not used):")
     for a in ("RESCUE", "CONTROL"):
         print(f"  {a:<8} n={aa[a]['n']:<5} J/S={aa[a]['rate']:.1%}")
     print(f"  difference {aa['diff'] * 100:+.1f} pp, 95% CI {aa['lo'] * 100:+.1f} to {aa['hi'] * 100:+.1f} pp")
 
-    is_case = Path(args.csv).resolve() == DEFAULT_CSV.resolve() and args.as_of == DEFAULT_AS_OF
-    if not is_case:
+    expected = EXPECTED.get(Path(args.csv).name)
+    if expected is None or args.as_of != DEFAULT_AS_OF:
         return 0
 
     got = {
@@ -161,9 +170,9 @@ def main(argv=None):
         "move": len(open_),
         "open_rescue": len(open_rescue),
     }
-    print("\nPhase 8 acceptance checks:")
+    print("\nAcceptance checks:")
     ok = True
-    for k, want in EXPECTED.items():
+    for k, want in expected.items():
         passed = got[k] == want
         ok &= passed
         print(f"  [{'PASS' if passed else 'FAIL'}] {k:<13} expected {want}, got {got[k]}")

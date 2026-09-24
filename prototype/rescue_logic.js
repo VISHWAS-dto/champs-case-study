@@ -14,7 +14,10 @@
 
   const DEFAULT_SETTINGS = {
     lateThresholdH: 48, // Phase 4: the join-rate step sits at 48h after lead creation
+    minMoveH: 3,        // MOVE only if at least this many hours remain before the deadline; else CONFIRM
     expiringSoonH: 4,   // shift-lead "expiring soon" window
+    mwe: 0.03,          // minimum worthwhile effect for the decision rule (+3 pp J/S)
+    minCompletion: 0.8, // adoption guardrail: share of rescue rows worked before their deadline
   };
 
   const OUTCOME_CODES = [
@@ -205,7 +208,8 @@
         deadline_utc: formatTime(deadline),
         deadline_ms: deadline,
         hours_left: hoursLeft > 0 ? Math.max(round1(hoursLeft), 0.1) : round1(hoursLeft),
-        action: hoursLeft > 0 ? "MOVE" : "CONFIRM",
+        // Too little time to book a new slot → confirm the current one instead (decided before rounding).
+        action: hoursLeft >= s.minMoveH ? "MOVE" : "CONFIRM",
         arm,
         deadline_local: formatLocal(deadline, row.parent_timezone),
         slot_local: formatLocal(demo, row.parent_timezone),
@@ -272,6 +276,24 @@
     return t !== null && t <= r.deadline_ms;
   }
 
+  // ------------------------------------------------------------------ first-seen register
+
+  /**
+   * Record, for every flagged row (BOTH arms), when it first appeared on a list and whether it was
+   * MOVE-eligible then. Existing entries are never overwritten. The register fixes each lead's arm and
+   * stratum at first listing, so a demo that is later moved (and no longer looks late in the CRM) still
+   * counts in its arm. Returns a new map.
+   */
+  function recordFirstSeen(register, flagged, asOf) {
+    const out = Object.assign({}, register || {});
+    flagged.forEach((r) => {
+      if (!Object.prototype.hasOwnProperty.call(out, r.lead_id)) {
+        out[r.lead_id] = { first_seen_at: formatTime(asOf), first_action: r.action, arm: r.arm };
+      }
+    });
+    return out;
+  }
+
   // ------------------------------------------------------------------ measurement
 
   /** Two-proportion difference with a 95% CI (normal approximation, as in Phase 4). */
@@ -284,22 +306,32 @@
   }
 
   /**
-   * Weekly readout (Phase 7 §6). Intent-to-treat: every late demo counts in its arm,
-   * whatever its call outcome.
+   * Weekly readout. Intent-to-treat: every listed late demo counts in its arm, whatever its call outcome.
    *
-   * @param rows      a LATER export with demo_joined filled in (Y/N)
-   * @param outcomes  { lead_id: {outcome, logged_at} }
-   * @param window    optional { from, to } epoch ms on created_at (the pilot period)
+   * With a first-seen register the population is every lead in the register (arm and stratum fixed at
+   * first listing), and the PRIMARY analysis is the MOVE-eligible stratum. Without one (e.g. historical
+   * data, where nobody was called) the population falls back to late demos in the export, all counted.
+   *
+   * @param rows       a LATER export with demo_joined filled in (Y/N)
+   * @param outcomes   { lead_id: {outcome, logged_at} }
+   * @param window     optional { from, to } epoch ms on created_at (the pilot period)
+   * @param settings   optional overrides of DEFAULT_SETTINGS
+   * @param firstSeen  optional { lead_id: {first_seen_at, first_action, arm} } from recordFirstSeen
    */
-  function measure(rows, outcomes, window, settings) {
+  function measure(rows, outcomes, window, settings, firstSeen) {
     const s = Object.assign({}, DEFAULT_SETTINGS, settings || {});
     outcomes = outcomes || {};
+    firstSeen = firstSeen || {};
     checkColumns(rows, ["lead_id", "created_at", "demo_scheduled_at", "demo_joined"]);
     window = window || {};
+    const useRegister = Object.keys(firstSeen).length > 0;
 
-    const arms = { RESCUE: { n: 0, joined: 0 }, CONTROL: { n: 0, joined: 0 } };
+    const newGroup = () => ({ RESCUE: { n: 0, joined: 0 }, CONTROL: { n: 0, joined: 0 } });
+    const all = newGroup();
+    const eligible = newGroup();
     const byOutcome = {};
     let workedInTime = 0;
+    let rescuePrimary = 0;
     let skippedNoResult = 0;
     const seen = new Set();
 
@@ -307,21 +339,30 @@
       if (seen.has(row.lead_id)) return; // duplicates: first row counts, as in the daily list
       seen.add(row.lead_id);
       const created = parseTime(row.created_at);
-      const demo = parseTime(row.demo_scheduled_at);
-      if (created === null || demo === null) return;
+      if (created === null) return;
       if (window.from !== undefined && created < window.from) return;
       if (window.to !== undefined && created > window.to) return;
-      if ((demo - created) / HOUR_MS <= s.lateThresholdH) return;
+      const reg = useRegister && Object.prototype.hasOwnProperty.call(firstSeen, row.lead_id)
+        ? firstSeen[row.lead_id] : null;
+      if (useRegister) {
+        if (!reg) return;                                     // never listed: not in the pilot
+      } else {
+        const demo = parseTime(row.demo_scheduled_at);
+        if (demo === null || (demo - created) / HOUR_MS <= s.lateThresholdH) return;
+      }
       const joined = (row.demo_joined || "").toUpperCase();
       if (joined !== "Y" && joined !== "N") { skippedNoResult++; return; } // demo not yet held
       const arm = armFor(row.lead_id);
       if (!arm) return;
 
       const isJoined = joined === "Y" ? 1 : 0;
-      arms[arm].n++;
-      arms[arm].joined += isJoined;
+      all[arm].n++;
+      all[arm].joined += isJoined;
+      const primary = !useRegister || reg.first_action === "MOVE";
+      if (useRegister && primary) { eligible[arm].n++; eligible[arm].joined += isJoined; }
 
-      if (arm === "RESCUE") {
+      if (arm === "RESCUE" && primary) {
+        rescuePrimary++;
         const o = outcomes[row.lead_id];
         const code = o ? o.outcome : "not_logged";
         const g = byOutcome[code] || (byOutcome[code] = { n: 0, joined: 0 });
@@ -332,28 +373,39 @@
     });
 
     const rate = (g) => (g.n ? g.joined / g.n : null);
-    Object.values(arms).forEach((g) => { g.rate = rate(g); });
+    const finish = (arms) => {
+      Object.values(arms).forEach((g) => { g.rate = rate(g); });
+      return { arms, ci: diffCi(arms.RESCUE.joined, arms.RESCUE.n, arms.CONTROL.joined, arms.CONTROL.n) };
+    };
     Object.values(byOutcome).forEach((g) => { g.rate = rate(g); });
-
-    const ci = diffCi(arms.RESCUE.joined, arms.RESCUE.n, arms.CONTROL.joined, arms.CONTROL.n);
-    const completion = arms.RESCUE.n ? workedInTime / arms.RESCUE.n : 0;
+    const secondary = finish(all);
+    const primary = useRegister ? finish(eligible) : secondary;
+    const completion = rescuePrimary ? workedInTime / rescuePrimary : 0;
     const anyLogged = Object.keys(byOutcome).some((k) => k !== "not_logged");
 
-    return { arms, ci, byOutcome, completion, skippedNoResult, verdict: verdict(ci, completion, anyLogged) };
+    return {
+      stratum: useRegister ? "MOVE_ELIGIBLE" : "ALL_LATE",
+      arms: primary.arms, ci: primary.ci,      // primary analysis
+      allLate: secondary,                      // secondary: every listed late demo
+      byOutcome, completion, skippedNoResult,
+      verdict: verdict(primary.ci, completion, anyLogged, s),
+    };
   }
 
-  /** Pre-registered week-4 decision rule (Phase 7 §6). */
-  function verdict(ci, completion, anyLogged) {
+  /** Pre-registered decision rule: minimum worthwhile effect (MWE) +3 pp, adoption guardrail 80%. */
+  function verdict(ci, completion, anyLogged, settings) {
+    const s = Object.assign({}, DEFAULT_SETTINGS, settings || {});
+    const mwe = "+" + Math.round(s.mwe * 100) + " pp";
     if (!ci) return { code: "NO_DATA", text: "Not enough late demos with a result in both arms." };
     if (!anyLogged) {
       return { code: "A_A", text: "No outcomes logged: this is an A/A check. The arms should match (CI spans 0)." };
     }
-    if (completion < 0.8) {
-      return { code: "INCONCLUSIVE", text: "Inconclusive: fewer than 80% of rescue rows were worked before their deadline. Fix adoption first." };
+    if (completion < s.minCompletion) {
+      return { code: "INCONCLUSIVE", text: `Inconclusive: fewer than ${Math.round(s.minCompletion * 100)}% of rescue rows were worked before their deadline. Fix adoption first.` };
     }
-    if (ci.lo > 0) return { code: "SCALE", text: "Scale: rescue arm joins more, and the CI excludes zero." };
-    if (ci.hi < 0) return { code: "STOP", text: "Stop: rescue arm joins LESS, and the CI excludes zero. Investigate." };
-    return { code: "STOP_OR_PIVOT", text: "Stop or pivot: completion was fine but the CI includes zero." };
+    if (ci.lo > 0) return { code: "SCALE", text: "Scale: the lower end of the 95% CI is above 0." };
+    if (ci.hi < s.mwe) return { code: "STOP", text: `Stop: the upper end of the 95% CI is below the minimum worthwhile effect (${mwe}).` };
+    return { code: "EXTEND", text: `Extend the pilot: the 95% CI includes 0 and still reaches above ${mwe}.` };
   }
 
   // ------------------------------------------------------------------ outcome log
@@ -408,7 +460,7 @@
   const api = {
     DEFAULT_SETTINGS, OUTCOME_CODES, REQUIRED_COLUMNS, OUTCOME_LOG_COLUMNS,
     parseCsv, toCsv, parseTime, formatTime, formatLocal, armFor,
-    buildRescueList, repView, summarise, measure, diffCi, readOutcomeLog, mergeOutcomes,
+    buildRescueList, repView, summarise, recordFirstSeen, measure, verdict, diffCi, readOutcomeLog, mergeOutcomes,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

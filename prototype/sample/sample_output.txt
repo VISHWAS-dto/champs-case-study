@@ -1,28 +1,26 @@
-Run as of 2026-07-15 09:00 on case_export.csv
-  upcoming demos booked >48h after lead : 92
-  ...deadline open (MOVE)                  : 45
-  ...deadline passed (CONFIRM)             : 47
-  open rows rescue / control               : 27 / 18
-  open rescue rows by shift                : {'IST_SHIFT': 15, 'US_SHIFT': 10, 'SEA_SHIFT': 2}
+Run as of 2026-07-15 09:00 on demo_export.csv
+  upcoming demos, slot >48h after lead    : 45
+  ...>=3h to deadline (MOVE)              : 12
+  ...<3h or passed (CONFIRM)              : 33
+  open rows rescue / control              : 6 / 6
+  open rescue rows by shift               : {'US_SHIFT': 3, 'IST_SHIFT': 2, 'SEA_SHIFT': 1}
 
-Rep view AD-07 (top 5, deadline in export clock):
-  L104265  Vietnam      deadline 2026-07-15 09:13     0.2 h  MOVE
-  L102531  Australia    deadline 2026-07-15 12:54     3.9 h  MOVE
-  L104871  India        deadline 2026-07-15 18:46     9.8 h  MOVE
-  L103803  India        deadline 2026-07-16 12:33    27.6 h  MOVE
-  L104545  Vietnam      deadline 2026-07-16 19:17    34.3 h  MOVE
+Rep view AD-02 (top 5, deadline in export clock):
+  D51137  USA          deadline 2026-07-16 00:46    15.8 h  MOVE
+  D80653  USA          deadline 2026-07-16 08:55    23.9 h  MOVE
+  D50787  USA          deadline 2026-07-14 23:17    -9.7 h  CONFIRM
 
-A/A readout (all late demos in the file, nobody was called):
-  RESCUE   n=629   J/S=46.4%
-  CONTROL  n=656   J/S=47.4%
-  difference -1.0 pp, 95% CI -6.4 to +4.5 pp
+A/A readout (every late demo in the export; outcome log not used):
+  RESCUE   n=200   J/S=46.0%
+  CONTROL  n=261   J/S=44.1%
+  difference +1.9 pp, 95% CI -7.2 to +11.1 pp
 
-Phase 8 acceptance checks:
-  [PASS] late_demos    expected 1285, got 1285
-  [PASS] late_rescue   expected 629, got 629
-  [PASS] late_control  expected 656, got 656
-  [PASS] js_rescue     expected 0.464, got 0.464
-  [PASS] js_control    expected 0.474, got 0.474
-  [PASS] flagged       expected 92, got 92
-  [PASS] move          expected 45, got 45
-  [PASS] open_rescue   expected 27, got 27
+Acceptance checks:
+  [PASS] late_demos    expected 461, got 461
+  [PASS] late_rescue   expected 200, got 200
+  [PASS] late_control  expected 261, got 261
+  [PASS] js_rescue     expected 0.46, got 0.46
+  [PASS] js_control    expected 0.441, got 0.441
+  [PASS] flagged       expected 45, got 45
+  [PASS] move          expected 12, got 12
+  [PASS] open_rescue   expected 6, got 6

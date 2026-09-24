@@ -104,12 +104,12 @@ JS vs pandas, 261 snapshots / 23,836 rows             → 0 mismatches (rows, ac
 ## 7. Final demo steps
 
 1. Open `prototype/rescue_sheet.html` in Chrome, Safari, Firefox or Edge by double-clicking it. Nothing needs installing, and nothing is uploaded.
-2. **1. CRM export** → `prototype/sample/case_export.csv`.
-3. **Run as of** → `15/07/2026 09:00`. Press **Build today's list**.
-   Expect: **92** upcoming late demos · **45 / 47** MOVE / CONFIRM · **27 / 18** rescue / control · IST 15 · US 10 · SEA 2.
-4. **Rep** → `AD-07`. The top row is L104265 (Vietnam), deadline *Wed 15 Jul, 16:13*, 0.2 h left, MOVE, with the script filled in. Set its outcome to *moved before deadline*. The row greys out and "1 outcome(s) saved" appears.
-5. **2. Outcome log** → `prototype/sample/rescue_outcomes_demo.csv`, then **Build** again. The red SIMULATED warning appears. Open **Summary** to see per-shift and per-rep completion against the 80% target.
-6. **Measurement** → **Run readout**. Rescue 629 at 46.4% vs control 656 at 47.4%, difference −1.0 pp (CI −6.4 to +4.5): the arms are balanced before any intervention. The verdict line applies the pre-registered Phase 7 rule.
+2. Press **Load sample data** (SYNTHETIC leads, SIMULATED outcomes; the confidential case CSV is not in the repository). Or pick `prototype/sample/demo_export.csv` under **1. CRM export**, set **Run as of** to `15/07/2026 09:00` and press **Build today's list**.
+   Expect: **45** upcoming late demos · **12 / 33** MOVE / CONFIRM · **6 / 6** rescue / control · IST 2 · US 3 · SEA 1.
+3. Every MOVE row has at least 3h to its deadline; rows with less show CONFIRM ("too late to move").
+4. **Rep** → `AD-02`. The top row is D51137 (USA), deadline *Wed 15 Jul, 20:46*, 15.8 h left, MOVE, with the script filled in. Set its outcome to *moved before deadline*. The row greys out and the outcome count goes up.
+5. The red SYNTHETIC/SIMULATED warning is shown. Open **Summary** to see per-shift and per-rep completion against the 80% target.
+6. **Measurement** → **Run readout** (after **Load sample data**, the pilot window is filled in). Primary = MOVE-eligible stratum from the first-seen register: rescue 164 vs control 174; verdict **Extend the pilot** (CI includes 0 and reaches above +3 pp). On the case CSV with nobody called (A/A, no register): rescue 629 at 46.4% vs control 656 at 47.4%, −1.0 pp (CI −6.4 to +4.5).
 7. Optional: **Download rescue list** (the CSV reps would get), and **Clear saved outcomes** (click twice) to reset.
 8. For reviewers, from the repo root:
    ```bash

@@ -1,3 +1,8 @@
 .DS_Store
 __pycache__/
 .venv/
+
+# Confidential case materials: keep locally, never commit
+BrightChamps_FDA_Case_Dataset.csv
+BrightChamps_FDA_Take_Home_Case_CANDIDATE.pdf
+**/case_export.csv

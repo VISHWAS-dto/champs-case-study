@@ -60,9 +60,21 @@ class RescueListTest(unittest.TestCase):
 
 class QaRegressionTest(unittest.TestCase):
     def test_action_is_decided_before_rounding(self):
+        # 2.97h left rounds to 3.0 but is below the 3h minimum: CONFIRM, not MOVE.
         with tempfile.TemporaryDirectory() as tmp:
-            df = C.load(write_csv(tmp, "L1,x,USA,UTC,2026-07-13 09:02,2026-07-17 09:00,AD-01,US_SHIFT,0,N,N,N"))
-        self.assertEqual(C.build_rescue_list(df, AS_OF).iloc[0].action, "MOVE")
+            df = C.load(write_csv(tmp, "L1,x,USA,UTC,2026-07-13 11:58,2026-07-17 09:00,AD-01,US_SHIFT,0,N,N,N"))
+        row = C.build_rescue_list(df, AS_OF).iloc[0]
+        self.assertEqual((row.action, row.hours_left), ("CONFIRM", 3.0))
+
+    def test_move_needs_at_least_3h_left(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            df = C.load(write_csv(
+                tmp,
+                "L1,x,USA,UTC,2026-07-13 12:00,2026-07-17 09:00,AD-01,US_SHIFT,0,N,N,N",  # exactly 3h: MOVE
+                "L3,x,USA,UTC,2026-07-13 09:12,2026-07-17 09:00,AD-01,US_SHIFT,0,N,N,N",  # 0.2h: CONFIRM
+            ))
+        out = C.build_rescue_list(df, AS_OF)
+        self.assertEqual(dict(zip(out.lead_id, out.action)), {"L1": "MOVE", "L3": "CONFIRM"})
 
     def test_bad_and_duplicate_lead_ids_are_skipped_not_a_crash(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -89,12 +101,22 @@ class QaRegressionTest(unittest.TestCase):
                 self.assertEqual(C.main([tmp]), 2)
 
 
-class CaseDataTest(unittest.TestCase):
-    def test_acceptance_checks_pass(self):
+class AcceptanceTest(unittest.TestCase):
+    def test_synthetic_sample_acceptance_checks_pass(self):
         out = io.StringIO()
         with redirect_stdout(out):
             code = C.main([])
         self.assertEqual(code, 0, out.getvalue())
+        self.assertIn("[PASS] move", out.getvalue())
+        self.assertNotIn("FAIL", out.getvalue())
+
+    @unittest.skipUnless(C.CASE_CSV.is_file(), "case CSV is not in the repository (confidential); place it at the root")
+    def test_case_data_acceptance_checks_pass(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = C.main([str(C.CASE_CSV)])
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertIn("[PASS] move          expected 43", out.getvalue())
         self.assertNotIn("FAIL", out.getvalue())
 
     def test_missing_file_returns_error_code(self):

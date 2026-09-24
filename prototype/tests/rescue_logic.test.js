@@ -45,8 +45,8 @@ test("formatLocal shows the parent's local time and falls back to UTC for an unk
 });
 
 test("armFor uses the last digit: odd = RESCUE, even = CONTROL", () => {
-  assert.equal(L.armFor("L102531"), "RESCUE");
-  assert.equal(L.armFor("L102120"), "CONTROL");
+  assert.equal(L.armFor("L100001"), "RESCUE");
+  assert.equal(L.armFor("L100010"), "CONTROL");
   assert.equal(L.armFor("LXYZ"), null);
 });
 
@@ -116,7 +116,7 @@ test("repView never shows control rows and puts TO DO first", () => {
 
 test("summarise counts worked-before-deadline and expiring rows", () => {
   const rows = csv(
-    "L1,x,USA,UTC,2026-07-13 11:00,2026-07-20 09:00,AD-01,US_SHIFT,0,,,", // 2h left, not worked -> expiring
+    "L1,x,USA,UTC,2026-07-13 12:30,2026-07-20 09:00,AD-01,US_SHIFT,0,,,", // 3.5h left, not worked -> expiring
     "L3,x,USA,UTC,2026-07-14 09:00,2026-07-20 09:00,AD-01,US_SHIFT,0,,,", // worked in time
     "L5,x,USA,UTC,2026-07-13 10:00,2026-07-20 09:00,AD-02,US_SHIFT,0,,,", // worked after deadline
   );
@@ -181,6 +181,55 @@ test("measure applies the pre-registered decision rule", () => {
   assert.equal(L.measure(rows, late).verdict.code, "INCONCLUSIVE");
 });
 
+test("decision rule: scale if CI lower end > 0, stop only if upper end < +3 pp, else extend", () => {
+  assert.equal(L.verdict({ diff: 0.08, lo: 0.01, hi: 0.15 }, 0.9, true).code, "SCALE");
+  assert.equal(L.verdict({ diff: -0.03, lo: -0.08, hi: 0.029 }, 0.9, true).code, "STOP");
+  assert.equal(L.verdict({ diff: 0.02, lo: -0.06, hi: 0.10 }, 0.9, true).code, "EXTEND");
+  assert.equal(L.verdict({ diff: -0.02, lo: -0.08, hi: 0.04 }, 0.9, true).code, "EXTEND"); // CI still reaches +3 pp
+  assert.equal(L.verdict({ diff: 0.2, lo: 0.1, hi: 0.3 }, 0.5, true).code, "INCONCLUSIVE"); // adoption first
+});
+
+test("recordFirstSeen records both arms once and never overwrites", () => {
+  const rows = csv(
+    "L1,x,USA,UTC,2026-07-14 09:00,2026-07-17 09:00,AD-01,US_SHIFT,0,,,", // MOVE, rescue
+    "L2,x,USA,UTC,2026-07-12 09:00,2026-07-17 09:00,AD-01,US_SHIFT,0,,,", // CONFIRM, control
+  );
+  const reg = L.recordFirstSeen({}, L.buildRescueList(rows, AS_OF).flagged, AS_OF);
+  assert.deepEqual(reg.L1, { first_seen_at: "2026-07-15 09:00", first_action: "MOVE", arm: "RESCUE" });
+  assert.equal(reg.L2.first_action, "CONFIRM");
+  const later = L.parseTime("2026-07-16 09:00");
+  const again = L.recordFirstSeen(reg, L.buildRescueList(rows, later).flagged, later);
+  assert.equal(again.L1.first_seen_at, "2026-07-15 09:00");
+  assert.equal(again.L1.first_action, "MOVE");
+});
+
+test("measure with a register: primary = MOVE-eligible stratum, and a moved demo stays in its arm", () => {
+  const rows = csv(
+    "L1,x,USA,UTC,2026-07-01 09:00,2026-07-02 12:00,AD-01,US_SHIFT,0,Y,N,N", // moved inside 48h in the CRM
+    "L2,x,USA,UTC,2026-07-01 09:00,2026-07-05 09:00,AD-01,US_SHIFT,0,N,N,N",
+    "L3,x,USA,UTC,2026-07-01 09:00,2026-07-05 09:00,AD-01,US_SHIFT,0,N,N,N", // first listed as CONFIRM
+    "L4,x,USA,UTC,2026-07-01 09:00,2026-07-05 09:00,AD-01,US_SHIFT,0,Y,N,N", // first listed as CONFIRM
+    "L5,x,USA,UTC,2026-07-01 09:00,2026-07-05 09:00,AD-01,US_SHIFT,0,Y,N,N", // never listed: not in the pilot
+  );
+  const reg = {
+    L1: { first_seen_at: "2026-07-01 12:00", first_action: "MOVE", arm: "RESCUE" },
+    L2: { first_seen_at: "2026-07-01 12:00", first_action: "MOVE", arm: "CONTROL" },
+    L3: { first_seen_at: "2026-07-03 08:00", first_action: "CONFIRM", arm: "RESCUE" },
+    L4: { first_seen_at: "2026-07-03 08:00", first_action: "CONFIRM", arm: "CONTROL" },
+  };
+  const outcomes = { L1: { outcome: "moved_before_deadline", logged_at: "2026-07-01 12:30" } };
+  const m = L.measure(rows, outcomes, {}, {}, reg);
+  assert.equal(m.stratum, "MOVE_ELIGIBLE");
+  assert.deepEqual([m.arms.RESCUE.n, m.arms.RESCUE.joined, m.arms.CONTROL.n], [1, 1, 1]);
+  assert.deepEqual([m.allLate.arms.RESCUE.n, m.allLate.arms.CONTROL.n], [2, 2]);
+  assert.equal(m.completion, 1);
+  // Without the register the population is wrong both ways: moved L1 drops out (it no longer looks late)
+  // and never-listed L5 is counted. Rescue arm = L3 + L5.
+  const noReg = L.measure(rows, outcomes);
+  assert.equal(noReg.stratum, "ALL_LATE");
+  assert.deepEqual([noReg.arms.RESCUE.n, noReg.arms.RESCUE.joined], [2, 1]);
+});
+
 test("measure leaves out demos without a result and honours the pilot window", () => {
   const rows = csv(
     "L1,x,USA,UTC,2026-07-01 09:00,2026-07-05 09:00,AD-01,US_SHIFT,0,,N,N",   // no result yet
@@ -201,10 +250,17 @@ test("parseTime rejects out-of-range minutes, seconds and hours instead of rolli
   assert.equal(L.parseTime("2026-07-15 23:59:59"), Date.UTC(2026, 6, 15, 23, 59, 59));
 });
 
-test("a MOVE row with minutes left never shows 0.0 h", () => {
+test("a row with minutes left is CONFIRM (under 3h) and never shows 0.0 h", () => {
   const r = L.buildRescueList(csv("L1,x,USA,UTC,2026-07-13 09:02,2026-07-17 09:00,AD-01,US_SHIFT,0,,,"), AS_OF).flagged[0];
-  assert.equal(r.action, "MOVE");
+  assert.equal(r.action, "CONFIRM");
   assert.equal(r.hours_left, 0.1);
+});
+
+test("MOVE needs at least 3h before the deadline, decided before rounding", () => {
+  const at = (created) => L.buildRescueList(csv(`L1,x,USA,UTC,${created},2026-07-17 09:00,AD-01,US_SHIFT,0,,,`), AS_OF).flagged[0];
+  assert.equal(at("2026-07-13 12:00").action, "MOVE");     // exactly 3h
+  assert.equal(at("2026-07-13 11:58").action, "CONFIRM");  // 2.97h, shown as 3.0
+  assert.equal(at("2026-07-13 11:58").hours_left, 3);
 });
 
 test("duplicate lead IDs are listed once and reported", () => {
@@ -243,21 +299,48 @@ test("toCsv neutralises spreadsheet formulas but leaves negative numbers alone",
   assert.equal(L.toCsv([{ a: "=HYPERLINK(1)", b: -12.5 }], ["a", "b"]), "a,b\n'=HYPERLINK(1),-12.5\n");
 });
 
-// ------------------------------------------------------------------ acceptance on the case data (Phase 8 §10A)
+// ------------------------------------------------------------------ acceptance on the sample data
 
-test("case CSV reproduces the Phase 8 acceptance counts", () => {
-  const rows = L.parseCsv(fs.readFileSync(path.join(__dirname, "..", "sample", "case_export.csv"), "utf8"));
+const SAMPLE = (() => { global.window = global.window || {}; require("../sample/demo_data.js"); return window.RESCUE_SAMPLE; })();
+
+test("synthetic sample reproduces the acceptance counts (same as check_rescue_logic.py)", () => {
+  const rows = L.parseCsv(fs.readFileSync(path.join(__dirname, "..", "sample", "demo_export.csv"), "utf8"));
+  assert.equal(L.toCsv(rows, Object.keys(rows[0])), SAMPLE.exportCsv); // the file and the bundle match
   const r = L.buildRescueList(rows, AS_OF);
   assert.deepEqual(
     [r.counts.flagged, r.counts.move, r.counts.confirm, r.counts.openRescue, r.counts.openControl],
-    [92, 45, 47, 27, 18]);
-  assert.deepEqual(r.counts.openRescueByShift, { IST_SHIFT: 15, US_SHIFT: 10, SEA_SHIFT: 2 });
+    [45, 12, 33, 6, 6]);
+  const m = L.measure(rows, {});
+  assert.deepEqual([m.arms.RESCUE.n, m.arms.CONTROL.n], [200, 261]);
+  assert.equal(m.arms.RESCUE.rate.toFixed(3), "0.460");
+  assert.equal(m.arms.CONTROL.rate.toFixed(3), "0.441");
+});
 
-  const top = L.repView(r.flagged, "AD-07").slice(0, 2);
-  assert.deepEqual(top.map((x) => [x.lead_id, x.deadline_local, x.hours_left, x.slot_local]), [
-    ["L104265", "Wed 15 Jul, 16:13", 0.2, "Sat 18 Jul, 23:33"],
-    ["L102531", "Wed 15 Jul, 22:54", 3.9, "Fri 17 Jul, 10:38"],
-  ]);
+test("synthetic pilot readout uses the register and applies the decision rule", () => {
+  const rows = L.parseCsv(SAMPLE.exportCsv);
+  const { outcomes } = L.readOutcomeLog(L.parseCsv(SAMPLE.outcomeCsv));
+  const win = { from: L.parseTime(SAMPLE.pilotFrom + " 00:00"), to: L.parseTime(SAMPLE.pilotTo + " 23:59") };
+  const m = L.measure(rows, outcomes, win, {}, SAMPLE.firstSeen);
+  assert.equal(m.stratum, "MOVE_ELIGIBLE");
+  assert.deepEqual([m.arms.RESCUE.n, m.arms.CONTROL.n], [164, 174]);
+  assert.equal(m.verdict.code, "EXTEND");
+});
+
+// ------------------------------------------------------------------ acceptance on the case data (local only)
+
+const CASE_CSV = path.join(__dirname, "..", "..", "BrightChamps_FDA_Case_Dataset.csv");
+
+test("case CSV reproduces the acceptance counts", { skip: !fs.existsSync(CASE_CSV) && "case CSV is confidential and not in the repository" }, () => {
+  const rows = L.parseCsv(fs.readFileSync(CASE_CSV, "utf8"));
+  const r = L.buildRescueList(rows, AS_OF);
+  assert.deepEqual(
+    [r.counts.flagged, r.counts.move, r.counts.confirm, r.counts.openRescue, r.counts.openControl],
+    [92, 43, 49, 25, 18]);
+  assert.deepEqual(r.counts.openRescueByShift, { IST_SHIFT: 14, US_SHIFT: 9, SEA_SHIFT: 2 });
+
+  // No case rows are quoted here (the case data is confidential): check the rules on the rows instead.
+  assert.ok(r.flagged.filter((x) => x.action === "MOVE").every((x) => x.hours_left >= 3));
+  assert.ok(r.flagged.filter((x) => x.action === "CONFIRM").every((x) => x.hours_left < 3));
 
   const m = L.measure(rows, {});
   assert.equal(m.arms.RESCUE.n, 629);

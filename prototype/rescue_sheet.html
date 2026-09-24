@@ -53,7 +53,7 @@
 <body>
 <main>
   <h1>Late-Demo Rescue Sheet</h1>
-  <div class="muted">Flags demos booked more than 48h after the lead arrived, so reps can offer a slot before <code>created_at + 48h</code>. Your data stays in this browser; nothing is uploaded.</div>
+  <div class="muted">Flags upcoming demos whose slot is more than 48h after lead creation, so reps can offer a slot before <code>created_at + 48h</code>. Your data stays in this browser; nothing is uploaded.</div>
 
   <div class="card">
     <div class="grid">
@@ -64,6 +64,7 @@
     </div>
     <div class="row" style="margin-top:10px">
       <button id="runBtn">Build today's list</button>
+      <button class="secondary" id="sampleBtn">Load sample data</button>
       <button class="secondary" id="dlList">Download rescue list</button>
       <button class="secondary" id="dlLog">Download outcome log</button>
       <button class="secondary" id="clearLog">Clear saved outcomes</button>
@@ -85,7 +86,7 @@
 
   <section class="panel" id="measure">
     <div class="card">
-      <p class="muted" style="margin-top:0">Weekly readout: join rate (J/S) of late demos, rescue arm vs control. Uses the export loaded above (load a <b>later</b> export with <code>demo_joined</code> filled in) and the saved outcomes. Intent-to-treat: every late demo counts in its arm, whatever the outcome.</p>
+      <p class="muted" style="margin-top:0">Weekly readout: join rate (J/S), rescue arm vs control. Uses the export loaded above (load a <b>later</b> export with <code>demo_joined</code> filled in), the saved outcomes and the first-seen register this browser keeps each time a list is built. Intent-to-treat: every listed late demo counts in its arm, whatever the outcome. <b>Primary:</b> the MOVE-eligible stratum (deadline still ≥3h away when the row was first listed). Decision rule: scale if the CI's lower end &gt; 0; stop only if its upper end &lt; +3 pp; otherwise extend.</p>
       <div class="grid">
         <div><label for="mFrom">Pilot start (lead created on/after)</label><input id="mFrom" type="date"></div>
         <div><label for="mTo">Pilot end (lead created on/before)</label><input id="mTo" type="date"></div>
@@ -101,26 +102,27 @@
       <ol>
         <li>Export scheduled demos from the CRM (same 12 columns as the case file).</li>
         <li>Pick it under <b>1. CRM export</b>. Add yesterday's <code>rescue_outcomes.csv</code> under <b>2</b> if you have one.</li>
-        <li>Leave <b>Run as of</b> at now (for the case data use 2026-07-15 09:00) and press <b>Build today's list</b>.</li>
+        <li>Leave <b>Run as of</b> at now and press <b>Build today's list</b>. Build the list on the <b>same browser every day</b>: it keeps the first-seen register the Measurement tab needs.</li>
         <li>Share the page, or <b>Download rescue list</b> into the shift's sheet.</li>
       </ol>
       <h2>During shift (rep)</h2>
       <ol>
         <li>Pick your rep ID. Work <span class="badge MOVE">MOVE</span> rows top-down: offer a slot <b>before the deadline shown</b>.</li>
-        <li><span class="badge CONFIRM">CONFIRM</span> rows are past their deadline: just confirm the current slot live.</li>
+        <li><span class="badge CONFIRM">CONFIRM</span> rows have less than 3h left or are past their deadline: just confirm the current slot live.</li>
         <li>Pick one outcome per row. It saves automatically.</li>
       </ol>
       <h2>Rules (in <code>rescue_logic.js</code> → <code>buildRescueList</code>)</h2>
       <ul>
-        <li>Flag: demo booked, gap from lead creation &gt; threshold, demo still in the future, lead created before "as of".</li>
-        <li>Deadline = <code>created_at + threshold</code>. MOVE if it has not passed, else CONFIRM.</li>
+        <li>Flag: demo booked, demo slot more than the threshold after lead creation, demo still in the future, lead created before "as of".</li>
+        <li>Deadline = <code>created_at + threshold</code>. MOVE if at least 3h remain, else CONFIRM.</li>
         <li>Arm: last digit of lead ID odd → rescue (shown to reps), even → control (never shown, never called).</li>
       </ul>
       <h2>Known limits</h2>
       <ul>
         <li>The export clock is assumed to be UTC. Only the displayed local times depend on this; confirm the time with the parent on the call.</li>
         <li>Outcomes are saved in this browser only. If reps log on different machines, download each log and merge them.</li>
-        <li>The file <code>sample/rescue_outcomes_demo.csv</code> is <b>SIMULATED</b>, only to demo the tabs. It is not evidence.</li>
+        <li><b>Load sample data</b> uses SYNTHETIC leads and SIMULATED outcomes (<code>sample/</code>), only to demo the tabs. It is not the case data and not evidence.</li>
+        <li><b>Clear saved outcomes</b> also clears the first-seen register.</li>
       </ul>
     </div>
   </section>
@@ -131,10 +133,12 @@
 "use strict";
 const L = window.RescueLogic;
 const STORAGE_KEY = "rescueOutcomes.v1";
+const REGISTER_KEY = "rescueFirstSeen.v1";
 
 const state = {
   rows: null,          // parsed CRM export
-  outcomes: loadSaved(),
+  outcomes: loadSaved(STORAGE_KEY),
+  firstSeen: loadSaved(REGISTER_KEY), // lead_id → {first_seen_at, first_action, arm}
   result: null,        // output of buildRescueList
   asOf: null,          // epoch ms
   runStartedReal: 0,   // Date.now() when the list was built, to advance the simulated clock
@@ -165,12 +169,16 @@ function readFile(input) {
   });
 }
 
-function loadSaved() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { return {}; }
+function loadSaved(key) {
+  try { return JSON.parse(localStorage.getItem(key)) || {}; } catch (e) { return {}; }
 }
 function save() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.outcomes)); } catch (e) { /* storage blocked: keep in memory */ }
-  $("logInfo").textContent = Object.keys(state.outcomes).length + " outcome(s) saved";
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.outcomes));
+    localStorage.setItem(REGISTER_KEY, JSON.stringify(state.firstSeen));
+  } catch (e) { /* storage blocked: keep in memory */ }
+  $("logInfo").textContent = Object.keys(state.outcomes).length + " outcome(s) saved · " +
+    Object.keys(state.firstSeen).length + " demo(s) in first-seen register";
 }
 
 function download(name, text) {
@@ -199,28 +207,57 @@ async function run() {
   try {
     const exportText = await readFile($("exportFile"));
     if (exportText === null && !state.rows) throw new Error("Pick a CRM export CSV first.");
-    if (exportText !== null) state.rows = L.parseCsv(exportText);
-
-    const logText = await readFile($("logFile"));
-    state.logProblems = [];
-    if (logText !== null) {
-      const logRows = L.parseCsv(logText);
-      const log = L.readOutcomeLog(logRows);
-      state.logProblems = log.problems;
-      state.outcomes = L.mergeOutcomes(state.outcomes, log.outcomes); // later logged_at wins
-      save();
-    }
-
-    state.asOf = L.parseTime($("asOf").value);
-    if (state.asOf === null) throw new Error("Set a valid 'Run as of' time.");
-    state.settings = settings();
-    state.runStartedReal = Date.now();
-    rebuild();
-    renderDaily();
-    renderSummary();
+    buildFrom(exportText, await readFile($("logFile")));
   } catch (e) {
     showError(e.message);
   }
+}
+
+// Shared by the file pickers and "Load sample data". Throws readable errors.
+function buildFrom(exportText, logText) {
+  if (exportText !== null) state.rows = L.parseCsv(exportText);
+
+  state.logProblems = [];
+  if (logText !== null) {
+    const logRows = L.parseCsv(logText);
+    const log = L.readOutcomeLog(logRows);
+    state.logProblems = log.problems;
+    state.outcomes = L.mergeOutcomes(state.outcomes, log.outcomes); // later logged_at wins
+    save();
+  }
+
+  state.asOf = L.parseTime($("asOf").value);
+  if (state.asOf === null) throw new Error("Set a valid 'Run as of' time.");
+  state.settings = settings();
+  state.runStartedReal = Date.now();
+  rebuild();
+  state.firstSeen = L.recordFirstSeen(state.firstSeen, state.result.flagged, state.asOf);
+  save();
+  renderDaily();
+  renderSummary();
+}
+
+// Load the SYNTHETIC sample (sample/demo_data.js) without a file picker. Works offline and from file://.
+function loadSample() {
+  showError("");
+  const go = () => {
+    try {
+      const S = window.RESCUE_SAMPLE;
+      $("asOf").value = S.asOf.replace(" ", "T");
+      $("mFrom").value = S.pilotFrom;
+      $("mTo").value = S.pilotTo;
+      state.firstSeen = Object.assign({}, S.firstSeen, state.firstSeen);
+      buildFrom(S.exportCsv, S.outcomeCsv);
+    } catch (e) {
+      showError(e.message);
+    }
+  };
+  if (window.RESCUE_SAMPLE) return go();
+  const tag = document.createElement("script");
+  tag.src = "sample/demo_data.js";
+  tag.onload = go;
+  tag.onerror = () => showError("Could not load sample/demo_data.js. Keep the sample folder next to this page.");
+  document.head.appendChild(tag);
 }
 
 // Rebuild the list from the loaded export and current outcomes; keep outcome-log problems visible.
@@ -241,9 +278,10 @@ function setOutcome(leadId, code) {
 // ------------------------------------------------------------ rendering
 
 function simulatedBanner() {
-  const simulated = Object.values(state.outcomes).some((o) => o.source === "SIMULATED");
+  const simulated = Object.values(state.outcomes).some((o) => o.source === "SIMULATED") ||
+    Object.values(state.firstSeen).some((o) => o.source === "SIMULATED");
   return simulated
-    ? `<p class="warn">Outcomes include SIMULATED demo data. Not evidence.</p>` : "";
+    ? `<p class="warn">Includes SYNTHETIC sample data and SIMULATED outcomes. Not evidence.</p>` : "";
 }
 
 function renderDaily() {
@@ -264,7 +302,8 @@ function renderDaily() {
       <td><b>${esc(r.lead_id)}</b><div class="muted">${esc(r.rep_assigned)}</div></td>
       <td>${esc(r.geography)}</td>
       <td>${esc(r.deadline_local)}<div class="muted">${esc(r.parent_timezone)}</div></td>
-      <td class="num">${r.action === "MOVE" ? r.hours_left.toFixed(1) + " h" : "passed"}</td>
+      <td class="num">${r.hours_left > 0 ? r.hours_left.toFixed(1) + " h" : "passed"}${
+        r.action === "CONFIRM" && r.hours_left > 0 ? `<div class="muted">too late to move</div>` : ""}</td>
       <td>${esc(r.slot_local)}</td>
       <td><span class="badge ${r.action}">${r.action}</span><div class="script">${esc(script)}</div></td>
       <td><select data-lead="${esc(r.lead_id)}">${optionList(r.status)}</select>
@@ -274,8 +313,8 @@ function renderDaily() {
 
   $("daily").innerHTML = `
     <div class="card grid">
-      <div><div class="stat">${counts.flagged}</div><div class="muted">upcoming demos booked &gt;${state.settings.lateThresholdH}h after lead</div></div>
-      <div><div class="stat">${counts.move} / ${counts.confirm}</div><div class="muted">deadline open (MOVE) / passed (CONFIRM)</div></div>
+      <div><div class="stat">${counts.flagged}</div><div class="muted">upcoming demos, slot &gt;${state.settings.lateThresholdH}h after lead</div></div>
+      <div><div class="stat">${counts.move} / ${counts.confirm}</div><div class="muted">≥3h to deadline (MOVE) / less or passed (CONFIRM)</div></div>
       <div><div class="stat">${counts.openRescue} / ${counts.openControl}</div><div class="muted">open rows: rescue (odd ID) / control (even ID)</div></div>
       <div><div class="stat" style="font-size:15px">${shifts}</div><div class="muted">open rescue rows by shift</div></div>
     </div>
@@ -331,27 +370,31 @@ function renderMeasure() {
       const v = $(id).value;
       return v ? L.parseTime(v + (end ? " 23:59" : " 00:00")) : undefined;
     };
-    const m = L.measure(state.rows, state.outcomes, { from: day("mFrom"), to: day("mTo", true) }, settings());
-    const a = m.arms;
-    const ci = m.ci;
+    const m = L.measure(state.rows, state.outcomes, { from: day("mFrom"), to: day("mTo", true) }, settings(),
+      state.firstSeen);
     const pp = (x) => (x >= 0 ? "+" : "") + (100 * x).toFixed(1) + " pp";
+    const armTable = (title, r) => `<h2>${title}</h2><div class="scroll"><table>
+        <thead><tr><th>Arm</th><th class="num">Late demos</th><th class="num">Joined</th><th class="num">J/S</th></tr></thead>
+        <tbody>
+          <tr><td>Rescue (odd ID)</td><td class="num">${r.arms.RESCUE.n}</td><td class="num">${r.arms.RESCUE.joined}</td><td class="num">${pct(r.arms.RESCUE.rate)}</td></tr>
+          <tr><td>Control (even ID)</td><td class="num">${r.arms.CONTROL.n}</td><td class="num">${r.arms.CONTROL.joined}</td><td class="num">${pct(r.arms.CONTROL.rate)}</td></tr>
+          <tr><td><b>Difference</b></td><td></td><td></td><td class="num"><b>${r.ci ? pp(r.ci.diff) : "–"}</b>
+            <div class="muted">${r.ci ? `95% CI ${pp(r.ci.lo)} to ${pp(r.ci.hi)}` : ""}</div></td></tr>
+        </tbody></table></div>`;
     const byOutcome = Object.entries(m.byOutcome).sort().map(([c, g]) =>
       `<tr><td>${esc(c.replace(/_/g, " "))}</td><td class="num">${g.n}</td><td class="num">${pct(g.rate)}</td></tr>`).join("");
+    const primaryTitle = m.stratum === "MOVE_ELIGIBLE"
+      ? "Primary: MOVE-eligible stratum (deadline ≥3h away at first listing)"
+      : "All late demos in the export (no first-seen register in this browser, so no MOVE-eligible stratum)";
 
     $("measureOut").innerHTML = `
       ${simulatedBanner()}
       <div class="card"><b>Verdict:</b> ${esc(m.verdict.text)}</div>
-      <div class="scroll"><table>
-        <thead><tr><th>Arm</th><th class="num">Late demos</th><th class="num">Joined</th><th class="num">J/S</th></tr></thead>
-        <tbody>
-          <tr><td>Rescue (odd ID)</td><td class="num">${a.RESCUE.n}</td><td class="num">${a.RESCUE.joined}</td><td class="num">${pct(a.RESCUE.rate)}</td></tr>
-          <tr><td>Control (even ID)</td><td class="num">${a.CONTROL.n}</td><td class="num">${a.CONTROL.joined}</td><td class="num">${pct(a.CONTROL.rate)}</td></tr>
-          <tr><td><b>Difference</b></td><td></td><td></td><td class="num"><b>${ci ? pp(ci.diff) : "–"}</b>
-            <div class="muted">${ci ? `95% CI ${pp(ci.lo)} to ${pp(ci.hi)}` : ""}</div></td></tr>
-        </tbody></table></div>
+      ${armTable(primaryTitle, m)}
+      ${m.stratum === "MOVE_ELIGIBLE" ? armTable("Secondary: every listed late demo (ITT)", m.allLate) : ""}
       <p>Rescue rows worked before their deadline: <b>${pct(m.completion)}</b> (target ≥80%).
         ${m.skippedNoResult ? `<span class="muted">${m.skippedNoResult} late demo(s) without a result yet were left out.</span>` : ""}</p>
-      <h2>Rescue arm J/S by outcome <span class="muted">(diagnostic, not causal; compare with control ${pct(a.CONTROL.rate)})</span></h2>
+      <h2>Rescue arm J/S by outcome <span class="muted">(diagnostic, not causal; compare with control ${pct(m.arms.CONTROL.rate)})</span></h2>
       <div class="scroll"><table><thead><tr><th>Outcome</th><th class="num">n</th><th class="num">J/S</th></tr></thead>
         <tbody>${byOutcome}</tbody></table></div>`;
   } catch (e) {
@@ -370,12 +413,15 @@ document.querySelectorAll(".tabs button").forEach((b) => {
 });
 
 $("runBtn").onclick = run;
+$("sampleBtn").onclick = loadSample;
 $("measureBtn").onclick = renderMeasure;
 $("dlList").onclick = () => {
   if (!state.result) return showError("Build a list first.");
-  const cols = ["lead_id", "arm", "action", "rep_assigned", "rep_shift", "geography", "parent_timezone",
+  const cols = ["lead_id", "arm", "action", "first_seen_at", "first_action", "rep_assigned", "rep_shift", "geography", "parent_timezone",
     "created_at", "demo_scheduled_at", "gap_h", "deadline_utc", "hours_left", "deadline_local", "slot_local", "status", "logged_at"];
-  download(`rescue_list_${L.formatTime(state.asOf).slice(0, 10)}.csv`, L.toCsv(state.result.flagged, cols));
+  const rows = state.result.flagged.map((r) => Object.assign({}, r, state.firstSeen[r.lead_id] &&
+    { first_seen_at: state.firstSeen[r.lead_id].first_seen_at, first_action: state.firstSeen[r.lead_id].first_action }));
+  download(`rescue_list_${L.formatTime(state.asOf).slice(0, 10)}.csv`, L.toCsv(rows, cols));
 };
 $("dlLog").onclick = () => {
   const rows = Object.entries(state.outcomes).map(([lead_id, o]) => ({ lead_id, outcome: o.outcome, logged_at: o.logged_at, source: o.source || "" }));
@@ -392,6 +438,7 @@ $("clearLog").onclick = () => {
   clearTimeout(clearArmed); clearArmed = null;
   $("clearLog").textContent = "Clear saved outcomes";
   state.outcomes = {};
+  state.firstSeen = {};
   save();
   if (state.result) { rebuild(); renderDaily(); renderSummary(); }
 };

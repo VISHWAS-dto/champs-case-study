@@ -11,7 +11,7 @@ Labels used throughout:
 
 ## 0. Decision
 
-**Selected lever: Option 3, the daily "Late-Demo Rescue" sheet.** Each shift gets a list of demos booked more than 48h after the lead arrived. The owning rep calls or WhatsApps the parent to move the demo to a slot before `created_at + 48h`. If the parent won't move, the rep gets a live confirmation of the existing slot. A random half of flagged demos is held out so we can measure the effect.
+**Selected lever: Option 3, the daily "Late-Demo Rescue" sheet.** Each shift gets a list of demos whose slot is more than 48h after lead creation. The owning rep calls or WhatsApps the parent to move the demo to a slot before `created_at + 48h`. If the parent won't move, the rep gets a live confirmation of the existing slot. A random half of flagged demos is held out so we can measure the effect.
 
 It is the only option that meets all of the following:
 - goes live inside two weeks with no engineering;
@@ -279,10 +279,15 @@ Buffer: 5 working days before the two-week line. Nothing waits on a vendor, temp
 | Process | % of rows worked before deadline (target ≥80%); % of rows still before deadline when the sheet is produced |
 | Guardrails | C/J and V/C of joiners in the rescue arm must not fall below control. Cancellations are tracked; they count as not joined in the intent-to-treat comparison |
 
-**Decision rule at week 4** (registered in advance):
-- **Scale:** the CI of the difference excludes zero and process completion is ≥80%. Keep the sheet, and consider Option 2 to automate the confirmation part and Option 1 to move the fix upstream.
-- **Stop or pivot:** the CI includes zero *with* completion ≥80%. The mechanism is weak, which is evidence for H2. Run the CRM reminder audit and consider Option 2 only if far-out demos are shown to be under-served.
-- **Inconclusive:** completion <80%. Fix adoption first and don't judge the lever yet.
+**Decision rule** (registered in advance; revised in Phase 14 after the evaluator review):
+
+- **Population and primary analysis.** Every demo is fixed in its arm and stratum the first time it appears on a daily list (the prototype's first-seen register). The primary comparison is the **MOVE-eligible stratum**: deadline still ≥3h away at first listing. All listed late demos are the secondary readout. The register matters because a demo moved inside 48h no longer looks late in a later export.
+- **Power.** ~300 per arm gives ~80% power only for a ~11 pp effect. Expected lever capture at illustrative rates is ~+3 pp (Phase 5 §11).
+- **Adoption first:** if fewer than 80% of rescue rows were worked before their deadline, the result is inconclusive. Fix adoption before judging the lever.
+- **Scale** if the lower bound of the 95% CI is above 0. Keep the sheet, and consider Option 2 to automate the confirmation part and Option 1 to move the fix upstream.
+- **Stop** only if the upper bound of the 95% CI is below the **minimum worthwhile effect of +3 pp**. The mechanism is too weak to matter, which is evidence for H2.
+- **Otherwise extend** the pilot. A cheap lever is not stopped on an underpowered readout.
+- **Displacement guardrail:** the share of new bookings more than 48h out stays at or below the 39.8% baseline.
 
 ---
 
